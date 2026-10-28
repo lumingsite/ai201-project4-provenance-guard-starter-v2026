@@ -222,23 +222,44 @@ it's exactly what Unit 8's attack set is built to exploit.
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "ok so I missed the bus AGAIN, third time this week, and my phone died right as I needed the map lol. anyway I walked 40 min and now my feet are destroyed, 10/10 would not recommend mondays", "creator_id": "yingfei"}'
 ```
 
 ```json
-
+{
+  "content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566",
+  "guess": "unsure",
+  "confidence": null,
+  "label": "PLACEHOLDER — scoring.score_to_label isn't wired in yet.",
+  "model_score": 0.1766,
+  "style_score": null
+}
 ```
 
+`confidence`, `guess`, `label`, and `style_score` are Milestone 3 placeholders
+on purpose — `model_score` is the only real signal wired in this milestone.
+They get filled in Milestones 4 and 5.
+
 **An appeal**
+
+`/appeal` isn't built yet (Milestone 5). Here's its current, honest state —
+the starter's 501, not a fake success:
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+  -d '{"content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566", "reasoning": "I wrote this myself"}'
 ```
 
 ```json
-
+{
+  "error": "not_implemented",
+  "message": "POST /appeal isn't built yet — see the TODO in app.py.",
+  "you_sent": {
+    "content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566",
+    "reasoning": "I wrote this myself"
+  }
+}
 ```
 
 **What the log shows afterwards**
@@ -248,8 +269,43 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 3,
+  "entries": [
+    {
+      "creator_id": "tester1",
+      "event": "rejected",
+      "reason": "missing_or_empty_text",
+      "status": "rejected",
+      "timestamp": "2026-10-28T23:40:17+00:00"
+    },
+    {
+      "creator_id": "tester1",
+      "event": "rejected",
+      "length": 20005,
+      "max_allowed": 20000,
+      "reason": "text_too_long",
+      "status": "rejected",
+      "timestamp": "2026-10-28T23:40:17+00:00"
+    },
+    {
+      "combined_score": null,
+      "content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566",
+      "creator_id": "yingfei",
+      "guess": "unsure",
+      "label": "PLACEHOLDER — scoring.score_to_label isn't wired in yet.",
+      "model_score": 0.1766,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-10-28T23:40:43+00:00"
+    }
+  ]
+}
 ```
+
+The two `rejected` entries above are from testing criteria.md #5 (missing
+text and oversized text) before this submission — proof the bad-input
+handling logs a trace instead of just returning an error and vanishing.
 
 ---
 

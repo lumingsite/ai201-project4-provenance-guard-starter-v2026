@@ -1,0 +1,5 @@
+{"timestamp": "2026-10-28T23:38:49+00:00", "content_id": "66382252-e03b-4362-a1d5-056953f7f4a2", "creator_id": "tester1", "guess": "unsure", "model_score": 0.139, "style_score": null, "combined_score": null, "label": "PLACEHOLDER — scoring.score_to_label isn't wired in yet.", "status": "decided"}
+{"timestamp": "2026-10-28T23:40:17+00:00", "creator_id": "tester1", "event": "rejected", "status": "rejected", "reason": "missing_or_empty_text"}
+{"timestamp": "2026-10-28T23:40:17+00:00", "creator_id": "tester1", "event": "rejected", "status": "rejected", "reason": "missing_or_empty_text"}
+{"timestamp": "2026-10-28T23:40:17+00:00", "creator_id": "tester1", "event": "rejected", "status": "rejected", "reason": "text_too_long", "length": 20005, "max_allowed": 20000}
+{"timestamp": "2026-10-28T23:40:43+00:00", "content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566", "creator_id": "yingfei", "guess": "unsure", "model_score": 0.1766, "style_score": null, "combined_score": null, "label": "PLACEHOLDER — scoring.score_to_label isn't wired in yet.", "status": "decided"}

@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -200,16 +201,63 @@ def submit():
     a malformed input is one of the most common real failures there is.
     """
     payload = request.get_json(silent=True) or {}
+    text = payload.get("text")
+    creator_id = payload.get("creator_id") or "unknown"
 
-    # TODO: delete this and build the route.
+    # Bad input, per criteria.md #5: never let a malformed request reach the
+    # detector. Missing/empty text -> 400. Oversized text -> 413. Both get
+    # logged as rejections (an attack that shows up only as an absence is one
+    # you'll never find), and neither is allowed to crash the service.
+    if not isinstance(text, str) or not text.strip():
+        audit.log_rejection(creator_id=creator_id, reason="missing_or_empty_text")
+        return jsonify({
+            "error": "bad_request",
+            "message": "text is required and cannot be empty.",
+        }), 400
+
+    MAX_TEXT_CHARS = 20_000
+    if len(text) > MAX_TEXT_CHARS:
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="text_too_long",
+            length=len(text),
+            max_allowed=MAX_TEXT_CHARS,
+        )
+        return jsonify({
+            "error": "payload_too_large",
+            "message": f"text must be at most {MAX_TEXT_CHARS} characters.",
+        }), 413
+
+    content_id = str(uuid.uuid4())
+
+    # Milestone 3: signal one only. model_score is real; everything that
+    # depends on signal two or the combining rule is a placeholder until
+    # Milestones 4 and 5.
+    model_score = detector.model_signal(text)
+    style_score = None       # Milestone 4
+    confidence = None        # Milestone 5
+    guess = "unsure"         # Milestone 5
+    label = "PLACEHOLDER — scoring.score_to_label isn't wired in yet."
+
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        combined_score=None,
+        label=label,
+        status="decided",
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+        "style_score": style_score,
+    })
 
 
 @app.post("/appeal")
