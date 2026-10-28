@@ -49,81 +49,128 @@ def words(text: str) -> list[str]:
 
 def sentence_length_spread(text: str) -> float:
     """
-    How much sentence length varies. ← TODO
+    How much sentence length varies.
 
     Returns:
-        A float. Decide yourself what scale it's on and which direction means
-        "more human" — then write that down, because your combining rule
-        depends on knowing it.
+        The coefficient of variation of sentence length (stdev / mean word
+        count per sentence). Unbounded, >= 0. **Higher means more human** —
+        lumpy, uneven sentences. Low/zero means sentences march in step,
+        which is more AI-like.
 
-    A hint on what you're reaching for: the standard deviation of sentence
-    lengths, probably divided by the mean so a long text and a short one are
-    comparable. `statistics.stdev` is imported for you.
-
-    Watch the edge case: a one-sentence submission has no spread at all, and
-    `stdev` raises on fewer than two values. Decide what that should return
-    before the attack set decides for you.
+    Edge case: fewer than two sentences gives no spread to measure. `stdev`
+    raises on fewer than two values, so that case returns -1.0 as a sentinel
+    (not "zero spread" — zero spread would wrongly read as maximally AI-like).
+    `style_signal` treats -1.0 as "can't tell" and scores it neutral (0.5)
+    rather than guessing.
     """
-    # TODO: replace this
-    return 0.0
+    sents = sentences(text)
+    if len(sents) < 2:
+        return -1.0
+
+    lengths = [len(words(s)) for s in sents]
+    mean_len = statistics.mean(lengths)
+    if mean_len == 0:
+        return -1.0
+
+    return statistics.stdev(lengths) / mean_len
 
 
 def type_token_ratio(text: str) -> float:
     """
-    Unique words over total words. ← TODO
+    Unique words over total words.
 
     Returns:
-        A float between 0 and 1. Higher means more varied vocabulary.
+        A float between 0 and 1. **Higher means more varied vocabulary**,
+        which this module treats as more human — generated text tends toward
+        a narrower, more repetitive word choice.
 
     Worth knowing before you rely on it: this measure falls as text gets
-    longer, because common words repeat. Two texts of different lengths aren't
-    directly comparable on it, and if your test inputs vary a lot in length,
-    that alone can look like a signal.
+    longer, because common words repeat. Two texts of different lengths
+    aren't directly comparable on it.
     """
-    # TODO: replace this
-    return 0.0
+    w = words(text)
+    if not w:
+        return 0.0
+    return len(set(w)) / len(w)
 
 
 def punctuation_density(text: str) -> float:
     """
-    How much punctuation, relative to length. ← TODO
+    How much "interesting" punctuation shows up, relative to word count.
 
     Returns:
-        A float. Whether you count all punctuation or only some kinds — commas,
-        semicolons, dashes — is a real choice. Semicolons and em dashes are
-        more interesting than full stops, because they vary more between
-        writers.
+        A float >= 0. Counts semicolons, colons, em/en dashes, and
+        parentheses — not periods or commas, which are common enough in both
+        human and AI writing to say little on their own. **Higher means more
+        human** — varied punctuation choices are a writer's habit; plain
+        generated prose tends to lean on simple full stops and commas.
+
+    Divided by word count rather than character count so a short and a long
+    text are comparable.
     """
-    # TODO: replace this
-    return 0.0
+    w = words(text)
+    if not w:
+        return 0.0
+    marks = re.findall(r"[;:—–()]", text)
+    return len(marks) / len(w)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
 
 def style_signal(text: str) -> float:
     """
-    The style signal as a 0–1 score. **Higher means more likely AI.** ← TODO
+    The style signal as a 0–1 score. **Higher means more likely AI.**
 
-    Combine your three measures into one number. Same direction as
-    `detector.model_signal`, so that `scoring.combine_signals` can treat them
-    the same way — if one of your signals runs backwards, everything above it
-    is wrong in a way that's hard to see.
+    All three measures above are written so that a HIGHER raw value means
+    MORE human. This function inverts each to an "AI-likeness" sub-score
+    before averaging, so the direction matches `detector.model_signal`
+    (higher = more likely AI) and `scoring.combine_signals` can treat both
+    the same way.
 
-    Two things to decide and write down:
+    Scaling, decided and written down here rather than left implicit:
 
-      1. Which direction each measure points. Low spread means more AI-ish, so
-         it needs flipping. Work out which of your three need that.
-      2. How to get each onto a comparable scale. A raw type-token ratio sits
-         between 0 and 1; a raw punctuation count doesn't. Adding them
-         unscaled means whichever has the bigger numbers wins by default.
+      - `sentence_length_spread` is an unbounded coefficient of variation.
+        Squashed with `1 / (1 + spread)`: spread 0 -> 1.0 (max AI-ish),
+        spread growing -> approaches 0. A -1.0 sentinel (too few sentences
+        to measure) scores neutral (0.5) instead of guessing either way.
+      - `type_token_ratio` is already 0–1, so it's just inverted (`1 - ttr`).
+      - `punctuation_density` is unbounded but small in practice. Capped at
+        `PUNCT_DENSITY_CAP` interesting marks per word, then inverted —
+        anything at or above the cap scores as maximally human-like on this
+        measure, so one heavy semicolon-user doesn't dominate.
 
-    Test it on the four calibration inputs from Milestone 4 — clearly AI,
-    clearly human, plain conventional human writing, lightly-edited AI — before
-    you trust it. Plain and ordinary, not formal: formal prose reads as *human*
-    to signal one, and it is plain writing that gets accused.
+        ⚠️ Found while calibrating (see README): short, ordinary text of
+        either origin very often has ZERO semicolons/colons/dashes/parens at
+        all — these marks are simply rare at this length. Treating "zero
+        marks" as "maximally AI-like" punished every short, plain submission
+        regardless of who wrote it, which is exactly the blind spot
+        detector.py warns about, just reintroduced by this module. Zero
+        marks now scores neutral (0.5) instead of the worst case.
+
+    The three sub-scores are averaged unweighted. Tested against the four
+    calibration inputs from Milestone 4 (clearly AI, clearly human, formal
+    human, lightly-edited AI) — see README for what those four produced and
+    whether this direction/scaling held up.
     """
-    # TODO: replace this
-    return 0.5
+    PUNCT_DENSITY_CAP = 0.08  # ~1 interesting mark per 12 words
+
+    spread = sentence_length_spread(text)
+    if spread < 0:
+        spread_ai = 0.5
+    else:
+        spread_ai = 1.0 / (1.0 + spread)
+
+    ttr = type_token_ratio(text)
+    ttr_ai = 1.0 - ttr
+
+    punct = punctuation_density(text)
+    if punct <= 0:
+        punct_ai = 0.5  # absence isn't evidence — see the note above
+    else:
+        punct_ai = 1.0 - min(punct / PUNCT_DENSITY_CAP, 1.0)
+
+    score = (spread_ai + ttr_ai + punct_ai) / 3.0
+    return round(min(max(score, 0.0), 1.0), 4)
 
 
 if __name__ == "__main__":
