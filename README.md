@@ -39,7 +39,84 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+**The path a submission takes:**
 
+1. A writer sends `POST /submit` with `{"text": ..., "creator_id": ...}`.
+2. The route generates a `content_id` (a uuid) so this submission can be
+   found again later, by `/log` or by an appeal.
+3. **Signal one** runs: `detector.model_signal(text)` loads `gpt2` locally,
+   measures how predictable the text is (perplexity), and turns that into a
+   0–1 `model_score` (higher = more AI-like).
+4. **Signal two** runs: `stylometry.style_signal(text)` measures the text's
+   shape — sentence-length spread, vocabulary variety, punctuation density —
+   with no understanding of what it says, and turns that into a 0–1
+   `style_score` (same direction as signal one).
+5. `scoring.combine_signals(model_score, style_score)` merges the two into
+   one `combined_score` from 0.0 (confidently human) to 1.0 (confidently AI).
+6. `scoring.score_to_label(combined_score)` turns that number into a
+   `guess` (`human` / `unsure` / `ai`) and the actual sentence a reader sees.
+7. `audit.log_decision(...)` writes the whole decision — both signal scores,
+   the combined score, the guess, the label — to the append-only log, and the
+   route returns `content_id`, `guess`, `confidence`, `label`, `model_score`,
+   and `style_score` to the caller.
+
+**Trace the false positive:** a real person — someone writing in a second
+language, or a younger writer, or anyone who writes short, plain sentences on
+purpose — submits work they wrote themselves.
+
+- Signal one's blind spot is exactly their situation: plain vocabulary in
+  short, ordinary sentences is *predictable*, and predictable is what
+  `model_signal` rewards with a high (AI-like) score. They get penalized for
+  writing simply, not for using AI.
+- Signal two can't rescue them either. If their honest writing also happens
+  to keep a fairly even rhythm and a narrower vocabulary (which plain,
+  unpretentious writing often does), `style_score` doesn't necessarily push
+  back — it has no way to tell "simple because that's how this person
+  writes" from "simple because a model generated it."
+- Both signals landing AI-like pushes `combined_score` into the
+  high-confidence-AI band. The label text they see has to carry real weight,
+  because it may be flatly wrong about them.
+- What they can do about it right now: **nothing** — `/appeal` doesn't exist
+  yet (that's Milestone 5). Until then, a wrongly-accused plain writer has no
+  path back. This is the scenario `criteria.md`'s "expensive mistake is
+  one-sided" framing is about, and it's why the thresholds in Milestone 5 and
+  the appeal path matter more than squeezing out a slightly better score.
+
+**The two endpoint shapes:**
+
+`POST /submit`
+
+```
+in:  {"text": "string, required", "creator_id": "string, required"}
+out: {
+  "content_id":  "string — uuid, used by /appeal and /log",
+  "guess":       "string — \"human\" | \"unsure\" | \"ai\"",
+  "confidence":  "float 0–1",
+  "label":       "string — the full sentence a reader sees",
+  "model_score": "float 0–1 — signal one",
+  "style_score": "float 0–1 — signal two"
+}
+```
+
+Decided before coding, not after: missing, empty, or enormous `text` gets a
+4xx and a logged rejection (`audit.log_rejection`) — never a crash and never
+a silent 200.
+
+`POST /appeal`
+
+```
+in:  {"content_id": "string, required — must match an existing submission",
+      "reasoning": "string, required"}
+out: {
+  "content_id": "string",
+  "status":     "\"under_review\"",
+  "message":    "string — confirmation shown to the writer"
+}
+```
+
+A `content_id` that doesn't exist (checked via `audit.entries_for`) gets a
+clear 404, not a silent no-op that looks like the appeal worked when it
+didn't.
 
 ---
 
@@ -53,19 +130,40 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** Perplexity — how surprised a local language model
+(`gpt2`) is by the text, i.e. how predictable it finds each next word. That
+gets squashed into a 0–1 score where higher means more likely AI.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** A language model
+writes by repeatedly picking a likely next word, so text a model produced
+tends to be text a model (even a different one) finds easy to predict. Human
+writing wanders more — odd word choices, abrupt turns, the specific rather
+than the typical.
 
-**What it can't see:**
+**What it can't see:** The difference between "predictable because an AI
+wrote it" and "predictable because the writer is being plain on purpose."
+Someone writing in a second language, a younger writer, or anyone sticking to
+vocabulary they're sure of all score about as machine-like as actual machine
+writing. The reverse is also blind: dense, ornate prose full of rare words
+reads as *human* here, because rare words are exactly what the model fails to
+predict — regardless of who or what actually wrote them.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text, not its meaning — how much
+sentence length varies, how much the vocabulary repeats, how much (and what
+kind of) punctuation shows up.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** Generated prose
+tends toward even, mid-length sentences and a narrower band of vocabulary,
+because that's what "most likely next word" produces on average. Human
+writing is lumpier — a three-word sentence next to a forty-word one.
 
-**What it can't see:**
+**What it can't see:** It cannot read. It has no idea what the text actually
+says, so anything that changes the text's shape without touching its
+substance moves the score — adding typos, re-breaking sentences, pasting in
+a quoted passage. That's a cheap, deliberate thing for someone to do, and
+it's exactly what Unit 8's attack set is built to exploit.
 
 ### The combining rule
 
