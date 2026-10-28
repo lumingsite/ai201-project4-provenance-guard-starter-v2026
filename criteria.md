@@ -44,61 +44,61 @@ Two things worth knowing before you pick numbers:
 ---
 ## 1.
 
-<!-- Your criterion. It must name a number. -->
+Of 10 pieces of text I wrote myself, at most 1 is labeled high-confidence AI.
 
-
-
-**Why this target:**
-
-
+**Why this target:** Signal one's blind spot (perplexity) penalizes
+predictable, plainly-written text regardless of who actually wrote it —
+exactly the kind of honest, simple writing a real person produces. The system
+has to stay conservative about accusing real writers; the appeal path exists
+to catch the rare miss, not to excuse a looser first judgment.
 
 ---
 
 ## 2.
 
-<!-- Your criterion. -->
+The combined score for clearly-AI text and clearly-human text differs by at
+least 0.3.
 
-
-
-**Why this target:**
-
-
+**Why this target:** A smaller gap isn't convincing evidence the two signals
+are distinguishing anything real — it could just as easily be noise. 0.3 is
+large enough that the difference can't be explained away as coincidence.
 
 ---
 
 ## 3.
 
-<!-- Your criterion. -->
+I can find at least one real piece of text that produces each of the three
+labels — human, unsure, and AI.
 
-
-
-**Why this target:**
-
-
+**Why this target:** A label that can never actually be produced is a label
+that doesn't exist, no matter how the scoring math underneath it was
+designed. This has to be checked by submitting real text and observing the
+output, not by inspecting the weights — if a label isn't reachable, that's a
+scoring bug to fix in Milestone 5, not a detail to note and move past.
 
 ---
 
 ## 4.
 
-<!-- Your criterion. -->
+Every appeal changes the submission's status to `under_review` and is
+recorded in the audit log. Both happen every time, with no exceptions.
 
-
-
-**Why this target:**
-
-
+**Why this target:** The appeal is the only recourse a wrongly-accused writer
+has. A path that works most of the time is, for the person it fails, the
+same as no path at all.
 
 ---
 
 ## 5.
 
-<!-- Your criterion. -->
+Missing or empty `text` returns HTTP 400 with a clear error message. Text
+over 20,000 characters returns HTTP 413 with a clear error message. Neither
+case ever returns a 500.
 
-
-
-**Why this target:**
-
-
+**Why this target:** A crash on bad input is one of the most common real
+failures a service has. Missing data and too much data are different
+problems for a caller to fix, so they get different status codes instead of
+being lumped into one generic error.
 
 ---
 
