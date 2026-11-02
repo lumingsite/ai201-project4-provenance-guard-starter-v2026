@@ -62,38 +62,60 @@ def combine_signals(model_score: float, style_score: float) -> float:
     )
 
 
+HUMAN_LABEL_TEXT = "We think this was written by a person. No action is needed."
+
+UNSURE_LABEL_TEXT = (
+    "We couldn't confidently tell whether this was written by a person or by "
+    "AI. This isn't an accusation — it just means our system didn't find a "
+    "clear signal either way. Nothing happens to your account because of this."
+)
+
+AI_LABEL_TEXT = (
+    "We think this was likely written by AI. If you wrote this yourself and "
+    "believe this is wrong, you can appeal this decision and a person will "
+    "take a look."
+)
+
+
 def score_to_label(score: float) -> tuple[str, str]:
     """
     Turn a score into a guess and the text a reader actually sees.
-    ← TODO (Milestone 5)
 
     Returns:
         (guess, label_text) — where `guess` is a short machine-readable string
         like "ai" / "human" / "unsure", and `label_text` is the full sentence
         shown to a person.
 
-    ⚠️ Write the label text for someone who has never heard the word
-    "threshold".
-
-        ✗ "human, 0.81 confidence"
-        ✓ "We think this was probably written by a person."
-
-    All three labels have to be **reachable**. If no score can produce one of
-    them, your ranges have a gap — and Milestone 5 asks you to submit text that
-    produces each one, which is how you'd find out.
-
-    The hardest one to write is "unsure". It has to admit uncertainty without
-    sounding like an accusation, because the person reading it may well have
-    written every word themselves. Your breakout asks your group what they'd
-    think if they got it on their own work. That question is the whole
-    milestone.
+    All three labels are reachable with the current weights/thresholds —
+    confirmed with the four Milestone 4 calibration texts: the clearly-human
+    text (combined 0.209) lands `human`, the formal-human and lightly-edited-AI
+    texts (0.470, 0.638) both land `unsure`, and the clearly-AI text (0.678)
+    lands `ai`. See README's Label Variants section.
     """
-    # TODO: replace this — thresholds are in config.py
     if score >= config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
+        return "ai", AI_LABEL_TEXT
     if score <= config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return "human", HUMAN_LABEL_TEXT
+    return "unsure", UNSURE_LABEL_TEXT
+
+
+def score_to_confidence(score: float) -> float:
+    """
+    How sure the system is of its own guess, as a 0–1 number for the response.
+    Not asked for by name in the brief, but `confidence` is in the required
+    response shape, so it needs a real rule rather than staying `null`.
+
+    In the human/AI bands: 0 at the threshold edge (barely past the line) up
+    to 1 at the far end (score 0.0 for human, 1.0 for AI). In the unsure band:
+    always 0 — "unsure" already says the system isn't confident, so a nonzero
+    number there would contradict the label text sitting right next to it.
+    """
+    if score <= config.HUMAN_THRESHOLD:
+        return round((config.HUMAN_THRESHOLD - score) / config.HUMAN_THRESHOLD, 4)
+    if score >= config.AI_THRESHOLD:
+        span = 1.0 - config.AI_THRESHOLD
+        return round((score - config.AI_THRESHOLD) / span, 4)
+    return 0.0
 
 
 def label_ranges() -> list[tuple[str, str]]:

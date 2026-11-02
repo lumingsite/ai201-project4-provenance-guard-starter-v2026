@@ -244,14 +244,41 @@ mistake named in `criteria.md` #1.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 – 0.35 | "We think this was written by a person. No action is needed." |
+| unsure | 0.35 – 0.65 | "We couldn't confidently tell whether this was written by a person or by AI. This isn't an accusation — it just means our system didn't find a clear signal either way. Nothing happens to your account because of this." |
+| high-confidence AI | 0.65 – 1.00 | "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look." |
 
-**Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+All three confirmed reachable with real submissions (Milestone 4's
+calibration texts): clearly-human → `human` (0.209), formal-human and
+lightly-edited-AI → `unsure` (0.470, 0.638), clearly-AI → `ai` (0.678).
+
+**Why I worded the "unsure" one this way, and what I found when I checked
+it:**
+
+I wrote "this isn't an accusation" specifically to head off the fear that
+"unsure" is a soft version of "guilty." I tested this the way the milestone
+asks — gave Claude just the label text, no system explanation, and asked
+what a writer would think reading it cold, without asking it to rewrite
+anything.
+
+The gap: a writer reading "this isn't an accusation" doesn't feel reassured
+by it — they notice that the sentence only exists because an accusation was
+possible, and start wondering whether something about their writing looked
+suspicious enough to need that disclaimer in the first place. The attempt at
+reassurance draws attention to the exact thing it's trying to defuse.
+
+Rule I'm going with for this unit: **keep the current wording and write the
+gap down rather than patch it blind.** I only have one piece of outside
+feedback on one label, and rewording now risks trading a known, named
+problem for an unknown one I haven't tested at all. The label still does the
+two things the milestone actually requires — it admits uncertainty, and it
+doesn't tell the writer anything happened to their account — so it's not
+broken, just imperfect in a specific, now-documented way. If a future
+pass revisits this, the fix to try first is cutting the reassurance clause
+entirely rather than strengthening it: "We couldn't confidently tell whether
+this was written by a person or by AI. Nothing happens to your account
+because of this." — stating the fact plainly instead of naming the fear and
+then denying it.
 
 
 
@@ -290,54 +317,68 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 Both signals and the combined score are real as of Milestone 4 — only
 `confidence` and the real label text are still Milestone 5 placeholders.
 
-**An appeal**
-
-`/appeal` isn't built yet (Milestone 5). Here's its current, honest state —
-the starter's 501, not a fake success:
+**A submission that lands `ai` (used for the appeal below)**
 
 ```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
+$ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566", "reasoning": "I wrote this myself"}'
+  -d '{"text": "It is important to note that effective time management involves several key strategies. First, individuals should prioritize tasks based on their urgency and importance. Additionally, breaking larger projects into smaller, manageable steps can significantly improve productivity and reduce overall stress levels.", "creator_id": "yingfei"}'
 ```
 
 ```json
 {
-  "error": "not_implemented",
-  "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-  "you_sent": {
-    "content_id": "706ebbf3-3d81-4963-8d5e-c9e3dfad2566",
-    "reasoning": "I wrote this myself"
-  }
+  "content_id": "1e644fad-eb8c-4caa-9b91-2e3b65aff3ed",
+  "guess": "ai",
+  "confidence": 0.0796,
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "model_score": 0.7035,
+  "style_score": 0.4472,
+  "combined_score": 0.67787
+}
+```
+
+**An appeal, using that `content_id`**
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/appeal \
+  -H "Content-Type: application/json" \
+  -d '{"content_id": "1e644fad-eb8c-4caa-9b91-2e3b65aff3ed", "reasoning": "I wrote this myself as part of a work report, I did not use AI."}'
+```
+
+```json
+{
+  "content_id": "1e644fad-eb8c-4caa-9b91-2e3b65aff3ed",
+  "status": "under_review",
+  "message": "Your appeal has been recorded. A person will review this decision."
+}
+```
+
+**An appeal against a `content_id` that doesn't exist (the typo case the
+milestone warns about)**
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/appeal \
+  -H "Content-Type: application/json" \
+  -d '{"content_id": "does-not-exist", "reasoning": "test"}'
+```
+
+```json
+{
+  "error": "not_found",
+  "message": "No submission found with content_id 'does-not-exist'."
 }
 ```
 
 **What the log shows afterwards**
 
 ```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+$ curl "http://127.0.0.1:5000/log?limit=5"
 ```
 
 ```json
 {
-  "count": 3,
+  "count": 5,
   "entries": [
-    {
-      "creator_id": "tester1",
-      "event": "rejected",
-      "reason": "missing_or_empty_text",
-      "status": "rejected",
-      "timestamp": "2026-10-28T23:40:17+00:00"
-    },
-    {
-      "creator_id": "tester1",
-      "event": "rejected",
-      "length": 20005,
-      "max_allowed": 20000,
-      "reason": "text_too_long",
-      "status": "rejected",
-      "timestamp": "2026-10-28T23:40:17+00:00"
-    },
     {
       "combined_score": 0.20895,
       "content_id": "5347b046-81be-4291-b1ef-c098a399c532",
@@ -348,14 +389,56 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
       "status": "decided",
       "style_score": 0.5001,
       "timestamp": "2026-10-28T23:48:23+00:00"
+    },
+    {
+      "combined_score": 0.20895,
+      "content_id": "4036e1e8-225b-4669-a4f1-13a6ac82508f",
+      "creator_id": "yingfei",
+      "guess": "human",
+      "label": "We think this was written by a person. No action is needed.",
+      "model_score": 0.1766,
+      "status": "decided",
+      "style_score": 0.5001,
+      "timestamp": "2026-11-02T15:40:50+00:00"
+    },
+    {
+      "combined_score": 0.4699400000000001,
+      "content_id": "dabcc45a-2c51-48f7-93b1-09e3531b094f",
+      "creator_id": "yingfei",
+      "guess": "unsure",
+      "label": "We couldn't confidently tell whether this was written by a person or by AI. This isn't an accusation — it just means our system didn't find a clear signal either way. Nothing happens to your account because of this.",
+      "model_score": 0.4665,
+      "status": "decided",
+      "style_score": 0.5009,
+      "timestamp": "2026-11-02T15:40:50+00:00"
+    },
+    {
+      "combined_score": 0.67787,
+      "content_id": "1e644fad-eb8c-4caa-9b91-2e3b65aff3ed",
+      "creator_id": "yingfei",
+      "guess": "ai",
+      "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+      "model_score": 0.7035,
+      "status": "decided",
+      "style_score": 0.4472,
+      "timestamp": "2026-11-02T15:40:50+00:00"
+    },
+    {
+      "content_id": "1e644fad-eb8c-4caa-9b91-2e3b65aff3ed",
+      "creator_id": "yingfei",
+      "event": "appeal",
+      "reasoning": "I wrote this myself as part of a work report, I did not use AI.",
+      "status": "under_review",
+      "timestamp": "2026-11-02T15:40:59+00:00"
     }
   ]
 }
 ```
 
-The two `rejected` entries above are from testing criteria.md #5 (missing
-text and oversized text) before this submission — proof the bad-input
-handling logs a trace instead of just returning an error and vanishing.
+The original `decided` entry for `1e644fad-...` is still there, untouched —
+the log is append-only. The `appeal` entry right after it is what actually
+carries the new `under_review` status; the decision itself isn't rewritten,
+which is the whole point of an audit trail someone could check later.
 
 ---
 

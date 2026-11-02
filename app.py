@@ -239,7 +239,7 @@ def submit():
     style_score = stylometry.style_signal(text)
     combined_score = scoring.combine_signals(model_score, style_score)
     guess, label = scoring.score_to_label(combined_score)
-    confidence = None        # Milestone 5
+    confidence = scoring.score_to_confidence(combined_score)
 
     audit.log_decision(
         content_id=content_id,
@@ -284,13 +284,41 @@ def appeal():
     wrong accusation and nothing at all.
     """
     payload = request.get_json(silent=True) or {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
 
-    # TODO: delete this and build the route.
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({
+            "error": "bad_request",
+            "message": "content_id is required.",
+        }), 400
+
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({
+            "error": "bad_request",
+            "message": "reasoning is required.",
+        }), 400
+
+    # Check the content_id actually exists before recording anything — a
+    # typo here otherwise fails silently and looks like a broken endpoint.
+    existing = audit.entries_for(content_id)
+    if not existing:
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission found with content_id '{content_id}'.",
+        }), 404
+
+    entry = audit.log_appeal(
+        content_id=content_id,
+        creator_id=existing[0].get("creator_id", "unknown"),
+        reasoning=reasoning,
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": entry["status"],
+        "message": "Your appeal has been recorded. A person will review this decision.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
