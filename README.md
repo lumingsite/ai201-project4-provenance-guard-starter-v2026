@@ -482,25 +482,58 @@ which is the whole point of an audit trail someone could check later.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 100 per day
 
-**Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+**Why those numbers and not others:** A real writer iterating on a single
+piece might resubmit a handful of times in a minute while editing, but
+rarely faster than once every 10-15 seconds — 5/minute is generous room for
+that without being anywhere near what a script sending rapid-fire variations
+to map the thresholds would want. 100/day covers someone checking many
+separate pieces across a very heavy day, while still making a bulk automated
+sweep expensive rather than free.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** `creator_id`, falling back to the caller's IP
+address only if `creator_id` is missing or not a string (the starter's
+`rate_limit_key`). This is the more human-centered choice — a shared office
+network shouldn't all count as one caller — but it has an obvious failure
+mode: nothing stops an attacker from sending a different `creator_id` on
+every request to appear as a thousand separate "callers" and dodge the limit
+entirely. That gap is a `creator_id`-authentication problem this project
+doesn't solve, not something the rate limiter itself can fix.
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
-
+```bash
+$ python run_attacks.py --flood 15
 ```
 
 ```
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
+
+  [ 1/15] 200
+  [ 2/15] 200
+  [ 3/15] 200
+  [ 4/15] 200
+  [ 5/15] 200
+  [ 6/15] 429
+  [ 7/15] 429
+  [ 8/15] 429
+  [ 9/15] 429
+  [10/15] 429
+  [11/15] 429
+  [12/15] 429
+  [13/15] 429
+  [14/15] 429
+  [15/15] 429
+
+============================================================
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
+============================================================
+```
+
+Exactly 5 through, then 429 for the rest — matching the 5/minute limit. `GET
+/log` confirms each 429 was recorded as a `rejected` entry with
+`reason: "rate_limited"`, not just returned and forgotten.
 
 ---
 
