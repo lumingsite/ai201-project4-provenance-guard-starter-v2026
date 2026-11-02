@@ -446,15 +446,35 @@ which is the whole point of an audit trail someone could check later.
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* In Milestone 4, after `style_signal` produced nearly
+  identical scores (0.61–0.67) across all four calibration texts — including
+  the clearly-AI and clearly-human ones — I asked Claude to help me figure
+  out which of the three measures was responsible, rather than just
+  re-weighting blind.
+- *What came back:* Running each measure separately on the four texts showed
+  `punctuation_density` returning exactly 0.0 for every single one. The
+  diagnosis: short calibration text almost never contains semicolons,
+  colons, or em-dashes, so treating "zero marks" as "maximally AI-like" was
+  applying a constant penalty to everyone, not measuring anything.
+- *What I changed:* Rewrote that sub-score so zero marks reads as neutral
+  (0.5) instead of worst-case, and documented the bug and the fix in
+  `stylometry.py` and the README rather than silently patching it.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* For the Milestone 5 "talk this through" check, I had
+  Claude read my three label texts cold — as a writer encountering them with
+  no system context — and say what each would make them think and do next,
+  without rewriting the wording.
+- *What came back:* For the `unsure` label, the read was that "this isn't an
+  accusation" doesn't land as reassurance — it signals that an accusation
+  was possible in the first place, which is the exact anxiety the sentence
+  was trying to head off.
+- *What I changed:* I decided not to reword the label on the strength of one
+  reaction to one phrasing. Instead I documented the gap plainly in the
+  README, along with the specific alternative I'd try next (dropping the
+  reassurance clause and stating the fact plainly) if a future pass revisits
+  it — a named, evidenced problem instead of an untested rewrite.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
