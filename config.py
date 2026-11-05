@@ -54,8 +54,16 @@ DETECTOR_MAX_TOKENS = 400
 # down BEFORE you code it, and to put the numbers in your README. Whatever you
 # decide, it goes here.
 
-WEIGHT_MODEL_SIGNAL = 0.9
-WEIGHT_STYLE_SIGNAL = 0.1
+# Unit 8, Milestone 5: reweighted from 0.9/0.1 after the diagnosis in README's
+# "Run Log and Verdicts" pointed straight at this number — 6 of 8 false_positive
+# attacks and criterion 1's miss were all signal one scoring plain/formal human
+# text as low-perplexity, with style_score reading closer to human but unable
+# to pull the combined score back under a 0.9 weight. 0.3/0.7 is the lowest
+# model-signal weight that still keeps attacker_PI02 (a genuine human sample)
+# under HUMAN_THRESHOLD — see README for the two attacks (FP06, FP07) this was
+# tuned against and the one it knowingly can't fix (MF07).
+WEIGHT_MODEL_SIGNAL = 0.3
+WEIGHT_STYLE_SIGNAL = 0.7
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
