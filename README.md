@@ -907,19 +907,134 @@ returns 413. No 500 in any of the 15 bad-input requests across 3 trials.
 
 **Diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+*Criterion 1 — MISSED (2/10, target ≤1/10).* Both misses (the dentist
+procrastination paragraph, the car-noise paragraph) hit `model_score` 0.70
+and 0.74 — the single highest `model_score`s of all ten pieces. Both are
+plain, common phrasing ("been putting off... for weeks," "made a weird
+noise") with ordinary sentence structure. **Stage: signal one
+(`detector.py::model_signal`).** Mechanism: GPT-2 finds ordinary, common
+phrasing highly predictable, and predictable text maps to a high AI score
+regardless of who wrote it. `style_score` for both was actually on the
+human side (0.34–0.38), but `combining_rule`'s 0.9 weight on signal one
+means style_score can't pull the combined score back down. This is the
+same failure already named in the attack run's `false_positive` family
+(FP03, FP06, FP07) — not a new bug, the same one showing up again against
+different text.
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+*Criterion 2 — MISSED (0.024 spread, target ≥0.3).* Worse than a narrow
+gap: the deliberately-AI-styled corporate paragraph scored *lower*
+(combined 0.487) than the plain human venting paragraph (combined 0.509)
+— backwards. **Stage: signal one.** Both texts are a single ~70-word
+paragraph, well under `config.DETECTOR_MAX_TOKENS` (400 tokens, roughly
+300 words) — `config.py`'s own comment says a steadier reading needs that
+much text. Short input gives signal one too little to work with, so both
+land near 0.5 almost by default, with the actual register barely
+affecting which side of 0.5 either one falls on.
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+*Criterion 3 — MISSED (2/3 labels reachable).* The `ai` label never
+appeared because the "clearly AI" input used for this criterion is the
+same short corporate paragraph from criterion 2, which only reached 0.487
+combined — inside the unsure band, nowhere near `AI_THRESHOLD` (0.65).
+**Same stage, same mechanism as criterion 2.** This isn't a third,
+independent problem: it's criterion 2's failure surfacing again at the
+label-mapping stage because that stage only sees whatever score upstream
+hands it.
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+*Criteria 4 and 5 — MET, no diagnosis needed.*
+
+**Pattern across the eval misses:** all three live in signal one, and they
+are not the same mechanism wearing one name — there are two distinct ones.
+Criterion 1 is a **register** problem (plain/common phrasing reads as
+AI-like regardless of length). Criteria 2 and 3 are a **length** problem
+(short input makes the reading unreliable, independent of register). Both
+point at `detector.py::model_signal`, but a fix for one wouldn't fix the
+other.
+
+**Broken attacks, same five-stage vocabulary:**
+
+- **`false_positive` (6 of 8 — FP02, FP03, FP04, FP05, FP06, FP07).**
+  Stage: signal one, amplified by the combining rule. Mechanism: identical
+  to criterion 1's miss — formal, plain, or structurally repetitive human
+  writing reads as low-perplexity, and the 0.9 weight on signal one means
+  `style_score` (which read closer to human on all six) never has enough
+  leverage to move the combined score back across `AI_THRESHOLD`. One
+  problem, six symptoms.
+- **MF07 (Arabic-script text, called `ai` at 0.906, the run's highest
+  confidence AI call).** Stage: signal one. Different mechanism from the
+  register bias above: GPT-2's training data and tokenizer are
+  overwhelmingly English. Non-Latin-script text tokenizes into sequences
+  GPT-2 has seen far less often, and that unfamiliarity reads as *low*
+  predictability to a human but the model's perplexity math doesn't
+  separate "unfamiliar because it's a different language" from "unfamiliar
+  because an AI avoided predictable phrasing" — both can push the score in
+  either direction depending on the specific text, and here it pushed
+  toward `ai`. A model trained mostly on English has no reliable signal
+  for text that isn't.
+- **MF02 and RQ07 (500 crashes, zero log entries).** Stage: the route
+  (`app.py::submit`), at its boundary with signal one. Mechanism:
+  `submit()` validates that `text` is a non-empty string and under 20,000
+  characters, but never checks it has enough *tokens* to score —
+  `detector.py::perplexity` raises `ValueError` below 3 tokens, and that
+  exception fires after `content_id` is generated but before
+  `audit.log_decision` is ever called, so the crash and the missing log
+  entry are the same bug: a route-level validation gap that happens to sit
+  upstream of the one write that would have recorded it.
+- **RQ06 (`creator_id` sent as a JSON object, corrupting the log
+  schema).** Stage: the route (`app.py::submit`). Mechanism: `creator_id`
+  is read with `payload.get("creator_id") or "unknown"` and never checked
+  for type before being handed to `audit.log_decision`, so a dict flows
+  straight into a field every other log entry has as a string.
+- **EV01 (typos added to AI text, called `human`).** Stage: signal one.
+  Mechanism: typos are literally unpredictable tokens to a language model
+  — they directly lower perplexity-derived predictability, which lowers
+  `model_score` on their own, no interaction with signal two needed.
+- **EV08 (AI text shortened below the useful token window, called
+  `human`).** Stage: signal one. **Same length mechanism as criteria 2 and
+  3** — this evasion attack and two of the three eval misses are one
+  problem, not three. Any fix that makes signal one reliable on short text
+  resolves all three at once.
+- **EV05 (AI text given a heavy human-style editing pass, called
+  `human`).** Stage: signal one and signal two together, right at the
+  threshold. The edits raised sentence-length variety and word variety
+  enough to move both signals a little toward human, and because the
+  original combined score was close to `AI_THRESHOLD` to begin with, that
+  small joint movement was enough to cross it. Unlike EV01, no single
+  signal did this alone.
+
+**The honest read on targets:** criteria 4 and 5 held, but neither was a
+close call across the trials (5/5 all three times, no near-miss), so I
+don't read those as targets set too easy — bad input and the appeal path
+are genuinely solid. The criterion I'd tighten if I revised anything is
+criterion 2: ≥0.3 spread turned out to be the right bar for *catching* a
+real problem (it caught one), not a bar that was too generous to begin
+with.
+
+**The opposite-verdict check** — criterion 2 is the one whose number
+surprised me most, because the gap wasn't just small, it ran backwards.
+Before accepting MISSED, I argued the other side as hard as I could:
+
+*The case for MET, or at least "not proven":* two single-paragraph samples
+is a sample size of one comparison, not a measurement of "clearly-AI vs
+clearly-human" in general — one unlucky pair of texts could produce a
+backwards result by chance even if the detector works correctly on longer,
+more typical submissions. `config.py` says explicitly that signal one
+needs real length to be steady; testing it with intentionally short text
+and then blaming signal one for an unsteady reading could be blaming the
+tool for a test that didn't meet its own documented precondition. On that
+reading, the criterion wasn't a fair test of the system — it was a test of
+what happens when you ignore the system's own stated minimum input length,
+and the verdict should maybe be "criterion needs revising to require
+longer inputs," not "signal one is broken."
+
+*What would settle it either way:* rerunning criterion 2 with several
+pairs of AI/human text at or above the ~300-word length `config.py` names
+as sufficient. If the spread opens up past 0.3 and consistently favors the
+AI sample once length is controlled for, that supports the "unfair test"
+reading and the fix is in `scenarios.py`, not `detector.py`. If the spread
+stays near zero or keeps reversing even at full length, that confirms the
+original MISSED verdict and the fix is in signal one itself. I haven't run
+that follow-up yet — it's the next thing to check before deciding which
+one is true.
 
 
 
