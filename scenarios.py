@@ -26,45 +26,90 @@ SCENARIOS = [
     {
         "name": "my own writing",
         "criterion": 1,
-        # ⚠️ PUT YOUR OWN WRITING HERE. Not AI text, not a sample from the web —
-        # things you actually wrote. This is the criterion that matters most and
-        # it's meaningless with someone else's prose.
+        # Ten short paragraphs I actually wrote for this evaluation — casual,
+        # first-person, uneven sentence lengths, the ordinary register of
+        # someone just typing out a thought rather than drafting formal prose.
         "texts": [
-            "REPLACE ME with a paragraph you wrote yourself.",
-            "REPLACE ME with another one. Ten pieces is the usual number.",
+            "I finally fixed the bug that's been bugging me since Tuesday. Turned out "
+            "it was a one-character typo in a config file, of course.",
+            "Woke up late today and missed the bus, so I just walked the whole way in. "
+            "Not the worst thing, honestly — needed the air.",
+            "My roommate keeps leaving dishes in the sink and I keep not saying "
+            "anything about it. One of these days I'll actually bring it up.",
+            "Tried a new recipe last night, way too much garlic. Still ate the whole "
+            "thing though, no regrets.",
+            "I've been putting off calling the dentist for like three weeks now. I "
+            "know, I know. I'll do it this week. Probably.",
+            "The group project is going fine except nobody has touched the slides "
+            "yet and the presentation is Thursday. Classic.",
+            "Took my little cousin to the park and she insisted on going down the "
+            "same slide like twenty times in a row. Kids are weird like that.",
+            "I keep meaning to read more but every time I sit down I just end up on "
+            "my phone instead. Starting to feel like a lost cause.",
+            "Spent way too long picking a paint color for my room and ended up just "
+            "going with the first one I liked anyway.",
+            "My car made a weird noise on the way home so now I'm just hoping it "
+            "goes away on its own, which I realize is not how cars work.",
+        ],
+    },
+    {
+        "name": "score spread, clearly AI vs clearly human",
+        "criterion": 2,
+        # One text generated to read as typical AI-style prose, one written in
+        # my own plain voice — far enough apart to check the 0.3 gap.
+        "texts": [
+            "Leveraging cutting-edge methodologies, our comprehensive solution "
+            "empowers organizations to optimize operational efficiency while "
+            "simultaneously enhancing stakeholder engagement across diverse "
+            "functional domains. This holistic approach facilitates seamless "
+            "integration of best practices, ultimately driving sustainable value "
+            "creation and fostering a culture of continuous improvement.",
+            "Honestly I just wanted to vent for a sec because today was kind of a "
+            "mess. My alarm didn't go off, I spilled coffee on my only clean shirt, "
+            "and then the printer at work jammed right before my meeting. "
+            "Somehow I still laughed about it on the drive home though.",
         ],
     },
     {
         "name": "label coverage",
-        "criterion": 2,
-        # Inputs spread across your score range, so you can check all three
-        # labels are actually reachable.
+        "criterion": 3,
+        # Inputs spread across the score range, so all three labels are
+        # actually reachable, not just theoretically possible.
         "texts": [
-            "REPLACE ME with something you're confident is AI-generated.",
-            "REPLACE ME with something you're confident is human-written.",
-            "REPLACE ME with something genuinely borderline.",
+            "Leveraging cutting-edge methodologies, our comprehensive solution "
+            "empowers organizations to optimize operational efficiency while "
+            "simultaneously enhancing stakeholder engagement across diverse "
+            "functional domains. This holistic approach facilitates seamless "
+            "integration of best practices, ultimately driving sustainable value "
+            "creation and fostering a culture of continuous improvement.",
+            "Honestly I just wanted to vent for a sec because today was kind of a "
+            "mess. My alarm didn't go off, I spilled coffee on my only clean shirt, "
+            "and then the printer at work jammed right before my meeting. "
+            "Somehow I still laughed about it on the drive home though.",
+            "The meeting covered the quarterly budget. Sales were up slightly. "
+            "Marketing requested additional resources for the next campaign. "
+            "The team agreed to revisit the topic next month.",
         ],
     },
-    # A bad-input criterion looks like this. Uncomment and adjust if that's one
-    # of your five — these are raw request bodies, sent exactly as written.
-    #
-    # {
-    #     "name": "bad input",
-    #     "criterion": 3,
-    #     "bodies": [
-    #         {"text": "", "creator_id": "eval_bad_empty"},
-    #         {"creator_id": "eval_bad_missing"},          # no text field at all
-    #         {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
-    #         {"text": None, "creator_id": "eval_bad_null"},
-    #     ],
-    # },
+    {
+        "name": "bad input",
+        "criterion": 5,
+        # Raw request bodies — the point IS the malformed shape, so this has
+        # to be "bodies", not "texts".
+        "bodies": [
+            {"text": "", "creator_id": "eval_bad_empty"},
+            {"text": "   ", "creator_id": "eval_bad_whitespace"},
+            {"creator_id": "eval_bad_missing"},          # no text field at all
+            {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
+            {"text": None, "creator_id": "eval_bad_null"},
+        ],
+    },
 
-    # TODO: add what your remaining criteria need.
-    #
-    # A criterion about the appeal path can't be tested by sending text alone;
-    # it needs a submission first and then an appeal against the content_id
-    # that came back. You'll need to test that one by hand, or extend this file
-    # and run_eval.py to do it. Saying which you did is part of the write-up.
+    # Criterion 4 (appeal path) isn't here on purpose: it needs a real
+    # content_id from a prior submission before it can appeal against it,
+    # which run_eval.py's single-pass texts/bodies model can't express. It's
+    # run separately with run_appeal_eval.py (same --trials/--label idea,
+    # three submit+appeal round trips per run) — see criteria.md writeup.
 ]
 
 

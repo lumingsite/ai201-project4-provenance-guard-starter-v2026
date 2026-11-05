@@ -809,18 +809,101 @@ because working out which one(s) actually explain it is the point:*
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing flagged as AI | ≤ 1 of 10 | 2/10 | 2/10 | 2/10 | MISSED |
+| 2. Score spread, clearly-AI vs clearly-human | ≥ 0.3 | 0.024 | 0.024 | 0.024 | MISSED |
+| 3. All three labels reachable | 3 of 3 | 2/3 | 2/3 | 2/3 | MISSED |
+| 4. Appeal always changes status | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 5. Bad input never returns a 500 | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+
+All three trials came out identical for every criterion, every time — expected,
+since nothing in either signal is random for fixed input. No instability to
+diagnose here; the misses are the scoring pipeline doing the same wrong thing
+three times in a row, not a flaky one-off.
 
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it:
 
-```json
+Criterion 1 — from `results/run_2026-11-04_1919_before.md`, produced by
+`run_eval.py::main` sending the "my own writing" scenario to `app.py::submit`.
+The two that tripped it:
 
+```json
+{
+  "status": 200,
+  "guess": "ai",
+  "confidence": 0.0641,
+  "model_score": 0.7052,
+  "style_score": 0.3775,
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "sent": "I've been putting off calling the dentist for like three weeks now. I ..."
+}
+{
+  "status": 200,
+  "guess": "ai",
+  "confidence": 0.1563,
+  "model_score": 0.7447,
+  "style_score": 0.3448,
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "sent": "My car made a weird noise on the way home so now I'm just hoping it go..."
+}
 ```
+
+Criterion 2 — same file, "score spread" scenario:
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "unsure",
+    "model_score": 0.4848,
+    "style_score": 0.4971,
+    "sent": "Leveraging cutting-edge methodologies, our comprehensive solution empo..."
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "model_score": 0.5083,
+    "style_score": 0.453,
+    "sent": "Honestly I just wanted to vent for a sec because today was kind of a m..."
+  }
+]
+```
+Combined scores land at 0.4873 and 0.5091 — a 0.022 gap, nowhere near 0.3.
+
+Criterion 3 — same file, "label coverage" scenario. The reachable labels
+across the three inputs were `unsure`, `unsure`, `human` — `ai` never showed
+up even from text written deliberately to sound like AI prose, because that
+same text only reached 0.4873 combined (see criterion 2's first entry).
+
+Criterion 4 — from `results/appeal_run_2026-11-04_1919_before.md`, produced
+by `run_appeal_eval.py::main` calling `app.py::submit` then `app.py::appeal`:
+
+```json
+{
+  "content_id": "14aa4a35-37cc-407d-88e6-505907a01639",
+  "submit_status": 200,
+  "submit_label": "We think this was written by a person. No action is needed.",
+  "appeal_status": 200,
+  "appeal_response_status_field": "under_review",
+  "changed_to_under_review": true
+}
+```
+All 5 rounds, all 3 trials, came back `changed_to_under_review: true`.
+
+Criterion 5 — same `run_eval.py` file, "bad input" scenario, run against
+`app.py::submit`:
+
+```json
+[
+  {"status": 400, "sent": "(empty text)"},
+  {"status": 400, "sent": "   "},
+  {"status": 400, "sent": "{\"creator_id\": \"eval_bad_missing\"}"},
+  {"status": 413, "sent": "word word word word ... (50,000 words)"},
+  {"status": 400, "sent": "{\"text\": null, \"creator_id\": \"eval_bad_null\"}"}
+]
+```
+Missing, empty, whitespace-only, and null text all return 400; oversized text
+returns 413. No 500 in any of the 15 bad-input requests across 3 trials.
 
 **Diagnoses**
 
