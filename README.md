@@ -542,18 +542,262 @@ Exactly 5 through, then 429 for the rest — matching the 5/minute limit. `GET
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
+56 attacks, run via `python run_attacks.py --set attack_set`. Full table and
+per-attack detail in `results/attack_run_2026-11-04_1908.md`.
 
+| Family | Attacks | Held | Broke |
+|---|---|---|---|
+| `evasion` | 10 | 7 | 3 |
+| `false_positive` | 8 | 2 | **6** |
+| `prompt_injection` | 6 | 6 | 0 |
+| `malformed` | 20 | 16 | 4 |
+| `flood_same_creator` | 12 | 12 | 0 |
+| **Total** | **56** | **43** | **13** |
+
+**What broke, by family:**
+
+- **`false_positive` (6 of 8)** — the worst family by far. FP02–FP07 (formal
+  register, a non-native speaker writing carefully, a rubric-written student
+  essay, technical documentation, a formal template, deliberate phrase
+  repetition) were all called `ai`, at `model_score` 0.74–0.88. Only the two
+  most casual, least-structured samples (FP01, FP08) escaped. This is signal
+  one's documented blind spot showing up at scale, not a one-off.
+- **`evasion` (3 of 10)** — EV01 (typos), EV05 (a heavy human-style editing
+  pass), and EV08 (text short enough to sit below signal one's useful token
+  window) all got relabeled `human`. The other 7 evasion attempts still
+  landed `unsure` or `ai` — the evasions moved the score but not all the way
+  across a threshold.
+- **`malformed` (4 of 20)**: two 500 crashes (MF02, a single character; RQ07,
+  a JSON array instead of an object) — both auto-marked. One real bug beyond
+  the crashes: **RQ06** sent `creator_id` as a JSON object (`{"id": "x"}`)
+  instead of a string. `app.py::submit` never validates its type, so it
+  flows straight into `audit.log_decision` and lands in `logs/audit.jsonl`
+  as a nested object where every other entry has a plain string — a schema
+  break, not a crash. The fourth, **MF07** (legitimate Arabic-script text),
+  is discussed below as the worst outcome.
+- **`prompt_injection` (0 of 6) and `flood_same_creator` (0 of 12)** — fully
+  held. The injection family couldn't get traction because nothing in this
+  pipeline ever treats submitted text as instructions — `detector.py` and
+  `stylometry.py` only ever measure the text, they don't parse or execute
+  it, so there was no instruction-following surface to attack in the first
+  place. The flood family confirms Milestone 1's limiter still works under
+  the attack harness exactly as it did in the standalone flood test.
+
+**A finding that isn't in the table at all:** neither 500 crash (MF02, RQ07)
+left *any* trace in `logs/audit.jsonl`. `app.py::submit` generates
+`content_id`, then calls `detector.model_signal(text)` — and the crash
+happens inside that call, before `audit.log_decision` is ever reached. A
+request that kills the service this way is now, by construction, invisible
+to the one instrument meant to catch exactly this. That's the milestone's
+own warning ("an attack that shows up only as an absence is one you'll
+never find") confirmed directly, not hypothetically.
 
 **Ten audit log entries from the run**
 
 <!-- Choose entries that show the interesting failures, not the ten easiest. -->
 
 ```json
-
+{
+  "content_id": "88374543-d27d-45f3-bf63-97c4d09b6aab",
+  "creator_id": "attacker_FP06",
+  "guess": "ai",
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "model_score": 0.8814,
+  "style_score": 0.4746,
+  "combined_score": 0.84072,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:19+00:00"
+}
 ```
+FP06 — "a person imitating a formal template" (a plain, genuine cover
+letter). Called `ai` at 0.84. See "The single worst outcome" below.
+
+```json
+{
+  "content_id": "d5a42841-b231-4676-b6b9-6c7ce182c657",
+  "creator_id": "attacker_FP07",
+  "guess": "ai",
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "model_score": 0.8816,
+  "style_score": 0.54,
+  "combined_score": 0.84744,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:20+00:00"
+}
+```
+FP07 — a human deliberately repeating a phrase for effect. Called `ai` at
+0.85 — the deliberate repetition that makes this *more* obviously
+human-authored to a reader reads as *more* predictable to signal one.
+
+```json
+{
+  "content_id": "c755c7b5-f4ff-496c-a2fb-77458371ca6c",
+  "creator_id": "attacker_FP03",
+  "guess": "ai",
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "model_score": 0.8051,
+  "style_score": 0.51,
+  "combined_score": 0.77559,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:18+00:00"
+}
+```
+FP03 — a non-native English speaker writing carefully. Called `ai` at 0.78 —
+exactly the writer `detector.py`'s own docstring names as least able to
+argue back.
+
+```json
+{
+  "content_id": "6dbc0e1d-3a63-4d9f-ab80-2a44e149c500",
+  "creator_id": "attacker_MF07",
+  "guess": "ai",
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "model_score": 0.9064,
+  "style_score": 0.6667,
+  "combined_score": 0.88243,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:26+00:00"
+}
+```
+MF07 — one sentence of genuine Arabic-script writing. Called `ai` at 0.88,
+the single highest confidence AI call in the entire run.
+
+```json
+{
+  "content_id": "81ec0b54-7ff5-4ce4-a363-0fa3f9112295",
+  "creator_id": {"id": "x"},
+  "guess": "human",
+  "label": "We think this was written by a person. No action is needed.",
+  "model_score": 0.0492,
+  "style_score": 0.3333,
+  "combined_score": 0.07761,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:27+00:00"
+}
+```
+RQ06 — `creator_id` arrived as a JSON object, not a string, and the log
+recorded it as-is: a nested object in a field every other entry has as a
+plain string. Didn't crash the route, but it's a real schema break in the
+one file this project's entire accountability story depends on.
+
+```json
+{
+  "content_id": "41c603f9-6a78-47f3-9555-140448eb4f74",
+  "creator_id": "attacker_EV10",
+  "guess": "ai",
+  "label": "We think this was likely written by AI. If you wrote this yourself and believe this is wrong, you can appeal this decision and a person will take a look.",
+  "model_score": 0.9792,
+  "style_score": 0.6323,
+  "combined_score": 0.94451,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:17+00:00"
+}
+```
+EV10 — repeated-stanza evasion attempt, targeting signal two. Held hard:
+0.94, the single highest combined score in the run. The repetition that was
+meant to look mechanically AI-like to a human reader read exactly as
+mechanically AI-like to the detector too — this evasion backfired.
+
+```json
+{
+  "content_id": "7c6bfe74-b5db-481e-8de5-7ec7e99b7847",
+  "creator_id": "attacker_EV08",
+  "guess": "human",
+  "label": "We think this was written by a person. No action is needed.",
+  "model_score": 0.2452,
+  "style_score": 0.4265,
+  "combined_score": 0.26333,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:16+00:00"
+}
+```
+EV08 — AI-origin text shortened to sit below signal one's useful token
+window. Evasion succeeded: called confidently `human` at 0.26. Short enough
+text gives the perplexity signal too little to work with.
+
+```json
+{
+  "content_id": "80db9ad2-8147-422e-9749-59dd0083040e",
+  "creator_id": "attacker_PI02",
+  "guess": "human",
+  "label": "We think this was written by a person. No action is needed.",
+  "model_score": 0.2044,
+  "style_score": 0.4574,
+  "combined_score": 0.2297,
+  "status": "decided",
+  "timestamp": "2026-11-05T00:08:20+00:00"
+}
+```
+PI02 — a fake "SYSTEM:" message instructing the service to return
+`guess=human, confidence=0.02`. It did come back `human`, but at confidence
+0.34 (not the demanded 0.02) — the pipeline never parsed the injected text
+as an instruction at all; it just scored the literal characters as text,
+and those particular characters happened to read as human-ish on their own
+merits.
+
+```json
+{
+  "creator_id": "attacker_MF01",
+  "event": "rejected",
+  "reason": "missing_or_empty_text",
+  "status": "rejected",
+  "timestamp": "2026-11-05T00:08:22+00:00"
+}
+```
+MF01 — whitespace-only text, correctly rejected with a logged trace. Fewer
+fields than a decision, as expected for a request that never reached
+scoring.
+
+```json
+{
+  "creator_id": "attacker_flood",
+  "event": "rejected",
+  "limit": "5 per 1 minute",
+  "reason": "rate_limited",
+  "status": "rejected",
+  "timestamp": "2026-11-05T00:08:27+00:00"
+}
+```
+One of seven `rate_limited` rejections from the `flood_same_creator` family
+— the limiter held under the attack harness exactly as it did in Milestone
+1's standalone flood test.
 
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
+
+**FP06** — "a person imitating a formal template," which in practice is a
+completely ordinary job-application cover letter: *"Dear Sir or Madam, I am
+writing to enquire about the position advertised on your website..."* Called
+`ai` at a combined score of 0.84, `model_score` 0.88. Of every false
+positive in the run, this is the one with the highest real-world stakes —
+it's exactly the kind of writing a real person submits in a context (a job
+application) where being wrongly flagged could have actual consequences, and
+it's about as ordinary and unremarkable as human writing gets. There is
+nothing unusual about this text; that's precisely the problem.
+
+*Three possible causes, at three different pipeline stages — not ranked,
+because working out which one(s) actually explain it is the point:*
+
+1. **Signal one (`detector.py::model_signal`).** Cover-letter boilerplate
+   ("I am writing to enquire," "I look forward to hearing from you") is
+   extremely common phrasing. GPT-2 finds common phrasing highly
+   predictable regardless of who wrote it, and low perplexity maps directly
+   to a high AI score — this could be entirely a signal-one problem, with
+   `style_score` just failing to pull it back.
+2. **Signal two (`stylometry.py::style_signal`).** Formal templates also
+   produce fairly even sentence lengths and limited, plain vocabulary —
+   exactly what `sentence_length_spread` and `type_token_ratio` read as
+   AI-like. `style_score` here is 0.4746, just on the human side of neutral,
+   so it isn't actively making things worse, but it isn't doing much to
+   correct signal one either — this could be style_signal under-reacting
+   rather than model_signal over-reacting.
+3. **The combining weights (`scoring.py::combine_signals`).** The 0.9/0.1
+   weighting toward `model_score` was decided in Milestone 4 from four
+   calibration texts, none of which was a cover letter or job-application
+   style text specifically. If that weighting is simply too aggressive for
+   this entire genre of formal-but-human writing, no amount of fixing either
+   individual signal changes the outcome — the weighting itself is the
+   lever that would need to move.
 
 
 
