@@ -476,6 +476,43 @@ which is the whole point of an audit trail someone could check later.
   reassurance clause and stating the fact plainly) if a future pass revisits
   it — a named, evidenced problem instead of an untested rewrite.
 
+**Moment 3**
+
+- *What I asked for:* For Milestone 2's attack run, after finding FP06 (a
+  plain, genuine cover letter called `ai` at 0.84), I had Claude give me
+  three possible causes at different pipeline stages — signal one, signal
+  two, and the combining weights — without saying which was most likely.
+- *What came back:* Three candidates, written up in the README's "single
+  worst outcome" section, none ranked.
+- *What I decided:* Milestone 4's actual diagnosis work (checking the real
+  `model_score`/`style_score` numbers against the five-stage breakdown)
+  confirmed it was signal one plus the combining weight together — common,
+  predictable phrasing reading as low-perplexity, with the 0.9 weight
+  leaving no room for `style_score` to correct it. Not purely the weight
+  and not purely the signal; both candidates were right at once, which is
+  exactly why Milestone 5's fix touched the weight rather than rewriting
+  `detector.py`.
+
+**Moment 4**
+
+- *What I asked for:* For Milestone 4's criterion 2 (score spread between
+  clearly-AI and clearly-human text), the result was backwards — the
+  AI-styled sample scored *lower* than the human one. I had Claude argue as
+  strongly as possible that the verdict should be MET or "not proven"
+  instead of MISSED, without saying which side was right.
+- *What came back:* The strongest case for the other side was that both
+  test texts were a single ~70-word paragraph, well under the ~300 words
+  `config.py` itself documents as needed for a steady reading — so the
+  criterion might be testing an unfair precondition, not a real defect.
+- *What I decided:* I kept the MISSED verdict rather than revising the
+  criterion. Milestone 5's reweighting change left this exact pair's scores
+  almost untouched (0.024 → 0.024 spread), which argues against "it's just
+  short text, weighting handles it" and for a genuine length-driven
+  unreliability in signal one that a proper fix would need to address with
+  longer-input handling, not a scoring-rule change. I didn't get to run the
+  longer-text follow-up test that would settle this definitively — see
+  What's Still Broken.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
@@ -1139,12 +1176,55 @@ same one-sided trade a threshold move would have made more bluntly.
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
-
+- **MF02 and RQ07 — 500 crashes, zero audit trail.** `app.py::submit`
+  checks that `text` is a non-empty string under 20,000 characters, but
+  never checks it has enough *tokens* for `detector.py::perplexity`, which
+  raises below 3 tokens. I'd add a minimum-length check in `submit()`
+  alongside the existing empty/oversized checks, returning 400 before the
+  text ever reaches signal one — the same shape as the checks already
+  there, just one more boundary. I stopped because Milestone 5 asked for
+  *one* change, and the diagnosis made clear this needed a route-level
+  input-validation fix, a completely different kind of change from the
+  scoring-weight fix I'd already committed to testing properly. Doing both
+  in one pass would have made it impossible to tell which change caused
+  which result.
+- **RQ06 — `creator_id` schema corruption.** Same stopping reason: `submit()`
+  needs `isinstance(creator_id, str)` before it reaches `audit.log_decision`,
+  rejecting non-string creator_id with a 400 the same way missing text is
+  rejected. A one-line fix, but still a second, unrelated change I held
+  back to keep Milestone 5's result attributable to a single cause.
+- **MF07 — non-English text called `ai` at high confidence.** Diagnosed as a
+  signal-one problem that isn't fixable by reweighting: `style_score` was
+  already AI-leaning (0.6667) on its own for this text, independent of
+  `model_score`. A real fix means either giving signal one language
+  coverage beyond GPT-2's overwhelmingly-English training distribution, or
+  adding a stated scope limit ("English text only, confidence undefined
+  otherwise") — both bigger changes than this unit's scope, and both need
+  more than one adversarial example to validate properly. I stopped at
+  naming the gap rather than guessing at a fix with a sample size of one.
+- **Criterion 2 (score spread) and criterion 3 (label coverage) — still
+  missed, diagnosed as the same length-driven signal-one unreliability.**
+  Milestone 5's fix left criterion 2 unchanged (0.024 → 0.024) exactly as
+  predicted, which is itself evidence the diagnosis was right rather than
+  a failure of the fix. The real test — rerunning with longer (~300-word)
+  AI/human pairs to see whether the spread opens up once signal one has
+  enough text to be reliable — is the follow-up named in Moment 4 above. I
+  didn't run it: it needs new calibration text written specifically for
+  that length, and I ran out of the unit's time before writing and
+  validating it properly rather than rushing a half-checked version.
 
 **The trade I'd make if this ran for real:**
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
+
+I'd keep the 0.3/0.7 weighting and accept more AI text landing in `unsure`
+or even slipping through as `human` (EV08's evasion sits just 0.02 above
+the human threshold) rather than go back toward 0.9/0.1 and re-expose real
+writers like FP06 and FP07 to wrongful AI accusations — a missed AI
+submission costs the platform a little credibility, but a wrongly-accused
+writer pays with their reputation and the burden of appealing, which is
+the more expensive and more personal cost between the two.
 
 
 
