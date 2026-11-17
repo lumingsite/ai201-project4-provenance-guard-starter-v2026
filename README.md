@@ -1512,6 +1512,75 @@ frequently (a free host's sleep/wake cycle, a crash loop) would pay this
 repeatedly; this project's own `RUNNING.md` already names that as the
 reason a free host doesn't fit this system at all.
 
+**Run Log and Verdicts**
+
+No scenario file this unit — each criterion needed a different request
+shape, worked out directly in a new `capstone_eval.py` rather than
+`scenarios.py`/`run_eval.py` (those assume one shape per scenario; here
+one criterion mixes normal and deliberately-malformed `/submit` calls,
+another needs `/ping` and `/health` alongside a full submit→appeal round
+trip). Three trials, changing nothing in between, each producing
+`results/capstone_trial_{1,2,3}.json`.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Complete instrumentation record every call | 20/20 | 20/20 | 20/20 | 20/20 | MET |
+| 2. Cost measurement stable (±20% of mean) | 9/10 | 9/10 | **7/10** | 9/10 | MISSED |
+| 3. Instrumentation overhead ≤5ms | 9/10 | 10/10 | 10/10 | 10/10 | MET |
+| 4. Signal-one crash always caught + logged | 5/5 | 5/5 | 5/5 | 5/5 | MET |
+| 5. No regression (ping/health/appeal) | 5/5 each | 5/5/5 | 5/5/5 | 5/5/5 | MET |
+
+Criterion 2 missed because the target has to hold in *every* trial, not
+turn up in two of three — trial 2 alone would read as a pass.
+
+**Real output**, from `capstone_eval.py::criterion_2_and_3` and
+`::criterion_4`, trial 2 (`results/capstone_trial_2.json`) — the trial
+that actually missed:
+
+```json
+{
+  "c2_met": 7,
+  "c2_total": 10,
+  "mean_signal_one_ms": 73.8,
+  "signal_one_ms": [60.45, 58.24, 61.81, 68.38, 67.26, 92.14, 75.98, 74.02, 93.73, 85.96],
+  "c3_met": 10,
+  "c3_total": 10,
+  "overheads_ms": [0.07, 0.07, 0.07, 0.07, 0.12, 0.07, 0.07, 0.08, 0.08, 0.11]
+}
+```
+Three of ten readings (58.24, 92.14, 93.73) fall outside ±20% of the
+73.8ms mean — the two high outliers nearly match each other, which looks
+less like independent noise and more like a shared cause (see `What's
+Still Broken`).
+
+From `capstone_eval.py::criterion_4`, confirming the signal-one crash
+path holds (same file):
+
+```json
+{
+  "creator_id": "cap_c4_t2_1",
+  "status": 500,
+  "clean_json_500": true,
+  "logged": true
+}
+```
+All 5 of 5 crash attempts across all 3 trials came back a clean JSON 500
+with `reason: "signal_one_error"` logged — never Flask's raw HTML crash
+page, and never silent.
+
+From `capstone_eval.py::criterion_5`, one of the 5 submit→appeal round
+trips, trial 2:
+
+```json
+{
+  "route": "submit+appeal",
+  "i": 1,
+  "submit_status": 200,
+  "appeal_status": 200,
+  "ok": true
+}
+```
+
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
