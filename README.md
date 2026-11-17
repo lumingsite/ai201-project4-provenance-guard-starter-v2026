@@ -1512,6 +1512,19 @@ frequently (a free host's sleep/wake cycle, a crash loop) would pay this
 repeatedly; this project's own `RUNNING.md` already names that as the
 reason a free host doesn't fit this system at all.
 
+**At a hundred people a day:** Milestone 6's gunicorn trials put the real
+steady-state warm cost at ≈61ms (0.061 CPU-seconds) per run — the number
+measured under the dev server (52.62ms) turned out to be slightly
+favorable, not inflated, so this is the one to use going forward.
+Assuming each of 100 people submits an average of 3 pieces of writing a
+day (a plausible rate for a feedback tool, not an extreme one): 100 × 3 =
+300 runs/day; 300 × 0.061s = **≈18.3 CPU-seconds of total compute per
+day.** That's effectively free — the real constraint at that scale isn't
+compute cost, it's that this is one single-threaded process handling
+those 300 runs serially, one at a time, with the current rate limit
+(5/minute per creator, 100/day) already capping how fast any single
+person could even try to submit that often.
+
 **Run Log and Verdicts**
 
 No scenario file this unit — each criterion needed a different request
@@ -1660,6 +1673,67 @@ the ~61ms mean observed here across cleaner trials, which is actually
 from runs that mostly landed between reloader polls rather than on top of
 one. Nothing about criteria 1, 3, 4, or 5 moved, confirming this was a
 genuinely isolated fix rather than a broader change in behavior.
+
+**How I Used AI**
+
+*Moment 1 — scoping, Milestone 1.* Before writing anything, I asked
+Claude to break the planned extension (timing instrumentation + a
+measured cost number + the Path B run-path confirmation) into its
+separate pieces of work, without judging whether it was achievable. The
+answer: one real piece — the two duration readings come off one timer
+wrapped around one call, the cost number is computed from that same
+data rather than built separately, and the `RUNNING.md` confirmation is
+documentation, not code. That kept Milestone 2 to a single, finishable
+change instead of three loosely related ones, and it's the reason there
+was nothing left to cut when the "ninety-minute" sanity check came due.
+
+*Moment 2 — diagnosing criterion 2, Milestone 6.* The raw evidence was
+two outlier readings (92.14ms, 93.73ms) sitting within 1.6ms of each
+other despite identical input and code path — a pattern that rules out
+pure independent noise but doesn't by itself say what the shared cause
+is. Rather than guess and patch, I generated the candidate mechanisms a
+shared cause could be (OS-level CPU contention, Python GC pauses, the
+Flask debug reloader thread polling the filesystem) and picked the one
+that was both plausible *and* cheaply falsifiable: switch off the
+reloader by running under gunicorn instead, re-measure, see if the
+correlated-spike pattern specifically goes away rather than just
+checking if the average improved. It did — and the fact that criterion
+2 went from failing one trial of three to passing all three, with the
+single worst outlier shrinking rather than vanishing, matches "the
+reloader was adding occasional correlated delay" much more precisely
+than it would match a vaguer "something about the server was slow."
+
+**What's Still Broken**
+
+All five criteria are MET after Milestone 6's fix — but that doesn't mean
+every target was pitched right, and one of them clearly wasn't:
+
+- **Criterion 3 (instrumentation overhead ≤5ms) was set far too loose.**
+  The actual measured overhead across every trial, before and after the
+  fix, sits at 0.07–0.12ms — roughly 40–70× tighter than the 5ms bound I
+  wrote. A target that loose would still pass even if the style signal,
+  the combining step, or the log write got dramatically slower (say,
+  20–30×) and something real had gone wrong. **I'd tighten it to ≤0.5ms
+  in at least 9 of 10** — still a comfortable multiple above what's
+  actually observed, so ordinary noise wouldn't trip it, but tight enough
+  to actually catch a real regression in the non-signal-one stages
+  instead of only ever confirming what was already obviously true.
+- **Criterion 2, though MET, isn't fully resolved — just reduced to where
+  it reliably clears the bar.** The after-trials still show one outlier
+  per trial roughly half the time (9/10, not always 10/10); the reloader
+  diagnosis explains the two worst, correlated spikes, but doesn't
+  explain every single elevated reading. I stopped there because the fix
+  already turned a genuine miss into a genuine, repeated pass within this
+  unit's time, and chasing the last single-outlier-per-trial would mean
+  profiling CPU scheduling on a shared laptop — a different, much larger
+  investigation than one unit's one-improvement budget.
+
+**What I'd do next, with another unit:** tighten criterion 3 to ≤0.5ms as
+above and re-run it — it's the fastest way to turn an instrumentation
+layer that's currently unfalsifiable in practice into one that would
+actually catch a real slowdown. I'd do that before touching the
+remaining criterion-2 jitter, because a criterion that can't fail isn't
+protecting anything, while criterion 2 already reliably passes.
 
 ---
 
