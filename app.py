@@ -244,7 +244,21 @@ def submit():
     # guess/label still come from the Milestone 5 placeholder in
     # scoring.score_to_label.
     signal_one_start = time.perf_counter()
-    model_score = detector.model_signal(text)
+    try:
+        model_score = detector.model_signal(text)
+    except Exception as exc:  # noqa: BLE001 — a crash here must still be logged
+        failed_duration_ms = round((time.perf_counter() - request_start) * 1000, 2)
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="signal_one_error",
+            error=f"{type(exc).__name__}: {exc}",
+            input_length=len(text),
+            total_duration_ms=failed_duration_ms,
+        )
+        return jsonify({
+            "error": "internal_error",
+            "message": "Could not score this submission.",
+        }), 500
     signal_one_duration_ms = round((time.perf_counter() - signal_one_start) * 1000, 2)
 
     style_score = stylometry.style_signal(text)
