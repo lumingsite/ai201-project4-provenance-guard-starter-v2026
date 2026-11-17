@@ -132,3 +132,71 @@ being lumped into one generic error.
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+---
+
+# Capstone — five new criteria, unaided
+
+Written before any capstone results exist, same rule as units 7/8: no
+template, no worked examples. Four of five are about the extension itself
+(the timing/failure instrumentation added this unit); one checks the
+original system didn't regress.
+
+## 1. Every call writes a complete instrumentation record
+
+Across 20 `/submit` calls (15 ordinary, 5 deliberately malformed enough to
+crash signal one), every single one produces a log entry containing
+`input_length`, `status`, and either both duration fields (`decided`) or
+`total_duration_ms` + a `reason` (`rejected`) — 20 of 20, zero gaps.
+
+**Why this target:** this unit's own warning is "a failure that shows up
+only as an absence is one you'll never find" — a logging layer that's
+*mostly* reliable is worse than one that's visibly unreliable, because a
+gap in an audit trail looks exactly like a quiet period. The standard has
+to be perfect, not "most of the time."
+
+## 2. The cost measurement is stable, not a fluke
+
+Across 10 identical-input warm requests, `signal_one_duration_ms` stays
+within ±20% of the 10-run mean in at least 9 of 10.
+
+**Why this target:** a number that swings wildly run to run isn't a
+measurement, it's one lucky or unlucky sample dressed up as one. 20% is
+loose enough to absorb ordinary OS scheduling jitter on a laptop CPU, but
+tight enough to catch something real going wrong — a memory leak slowing
+later runs, say — rather than passing no matter what happened.
+
+## 3. Instrumentation overhead stays small next to what it measures
+
+`total_duration_ms − signal_one_duration_ms` (everything that isn't
+signal one: the style signal, combining, labeling, the log write) stays
+at or under 5ms in at least 9 of 10 runs.
+
+**Why this target:** logging that costs as much as the thing it's
+measuring corrupts the number it's trying to report. 5ms is roughly 10%
+of the ~50ms warm signal-one time already observed — tight enough to
+matter, loose enough that ordinary Python/JSON-write overhead doesn't
+trip it by accident.
+
+## 4. A crash in signal one is always caught and always logged
+
+A request engineered to crash signal one (text under the 3-token minimum)
+never returns a raw, unhandled 500 and always produces a log entry with
+`reason: "signal_one_error"` — 5 of 5 trials.
+
+**Why this target:** this exact gap was invisible through all of unit 8
+(MF02, RQ07) because nothing caught the exception before it reached the
+log call. The fix this unit made only counts if it holds every time — the
+one trial it doesn't fire is indistinguishable, from the outside, from
+the bug never having been fixed at all.
+
+## 5. The instrumentation change didn't break anything it touches
+
+`/ping`, `/health`, and the full submit→appeal flow each return their
+documented shape and status code in 5 of 5 calls, after the timing and
+failure-logging changes.
+
+**Why this target:** an extension that works but silently breaks
+something else is a regression I'd find out about from a real user, not
+from testing — cheap to rule out now with a blunt, repeated check rather
+than trusting "I didn't touch that file."
