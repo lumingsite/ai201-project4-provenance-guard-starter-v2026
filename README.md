@@ -1263,4 +1263,55 @@ the more expensive and more personal cost between the two.
 
 ---
 
+## Capstone
+
+**The Shape**
+
+Shape A — deploy and instrument, Path B (local, documented). Provenance
+Guard already runs a model locally (GPT-2, ~550MB) rather than calling an
+API, which is exactly the case this unit's own setup section names as the
+one where Path B is the right call, not a fallback — a free hosted tier's
+512MB wouldn't hold the model at all. The extension: add structured
+timing to every `/submit` call — total request duration and the
+signal-one (model call) duration specifically, since that's the stage
+that actually costs something — write both into the existing audit log
+alongside what's logged already, and use that same data to report a real,
+measured cost-per-run number instead of an estimate. `RUNNING.md` already
+documents the single-command local run path from unit 7; this unit
+confirms it still matches a clean checkout and fills in the two things
+Path B additionally asks for (pinned dependency versions, model file
+size) if they aren't already there.
+
+**What's out of scope**
+
+- **Not a per-stage latency breakdown across all five stages** (route,
+  signal one, signal two, combining, labeling) — only total and
+  signal-one timing. The stretch section offers a full breakdown as
+  extra credit; I'm not attempting it this unit so the base instrumentation
+  gets tested properly instead of being one of several half-finished
+  pieces.
+- **Not touching `scoring.py` or `config.py`'s weights again.** Unit 8
+  already changed and re-tested those; this unit's criteria are about
+  observability (is every run logged, is the cost number stable, is the
+  instrumentation's own overhead small), not detection accuracy.
+- **Not adding a hosted deployment or any new route** (no `/stats`
+  endpoint, no second detector). A new endpoint is Shape C's shape, not
+  this one, and hosting a model that needs more memory than the free tier
+  offers would just mean asking a TF for an exception — not worth it
+  when Path B answers the same requirement honestly.
+
+**The scope-size check:** I asked Claude to break this plan into its
+separate pieces of work without judging whether it was achievable. The
+answer: one real piece. "Total + signal-one timing" are two numbers
+captured by the same timer wrapped around the same two calls in
+`app.py::submit` — not two separate changes, just two readings off one
+instrumentation pass. The cost-per-run number is computed from that same
+data, not built separately. `RUNNING.md`'s Path B confirmation is
+documentation, not new code. So the actual build is the one timing change
+— comfortably under the ~90-minute guideline — with the rest of the unit
+being the run path check, the criteria, the testing, and the write-up,
+exactly as the milestone describes.
+
+---
+
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
