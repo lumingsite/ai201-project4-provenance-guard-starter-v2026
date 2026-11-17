@@ -11,11 +11,23 @@ assumed — the starter ships one that already answers.
 ## Before your first class
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv            # see note below if you don't have 3.12
 source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python test.py
 ```
+
+> **Why `python3.12` and not plain `python3`.** `requirements.txt` lists
+> Python 3.11–3.13 as supported, and that's true in general — but on an
+> Intel Mac, plain `python3` resolved to 3.13.13 here and `pip install`
+> failed outright: `torch<3.0,>=2.2` has no macOS x86_64 wheel past
+> `2.2.2`, and pip couldn't find any matching distribution for 3.13 on
+> this hardware. Confirmed by actually re-cloning this repo into an empty
+> folder and following these exact steps with plain `python3` first —
+> that's the failure a fresh reader hits. Switching to `python3.12`
+> resolved cleanly (torch `2.2.2`) and `python test.py` passed 9/9. On
+> Apple Silicon or a newer machine 3.13 may work fine — if `pip install`
+> can't find a torch wheel, this is why, and 3.12 is the fix.
 
 **You're ready when `python test.py` passes.**
 
