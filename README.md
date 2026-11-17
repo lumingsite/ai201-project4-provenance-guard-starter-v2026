@@ -1312,6 +1312,206 @@ documentation, not new code. So the actual build is the one timing change
 being the run path check, the criteria, the testing, and the write-up,
 exactly as the milestone describes.
 
+**Instrumentation**
+
+Every `/submit` call writes a structured record via `audit.py::_append` —
+same JSONL file as unit 7/8, with three fields new this unit:
+`input_length`, `total_duration_ms`, and `signal_one_duration_ms`. A
+crash inside signal one — previously invisible (see unit 8's `What's
+Still Broken`, MF02/RQ07) — now logs too, via a new try/except in
+`app.py::submit` around `detector.model_signal`, with `reason:
+"signal_one_error"` and the actual exception message.
+
+I tested my own `RUNNING.md` by cloning this repo into an empty folder
+and following its setup steps literally. It failed on the first try —
+plain `python3` resolved to 3.13.13 on this Intel Mac and `pip install`
+couldn't find a `torch` wheel for it at all (`torch>=2.2,<3.0` tops out at
+`2.2.2` on macOS x86_64). Re-ran with `python3.12` explicitly: clean
+install, `python test.py` passed 9/9. `RUNNING.md`'s setup command now
+names `python3.12` directly instead of plain `python3`, with that failure
+and fix written in as a note, so the next reader hits it before an
+install cycle instead of after.
+
+Ten entries, one of them a failed run, pasted as real JSON — not a
+description:
+
+```json
+{
+  "creator_id": "capstone_failtest",
+  "error": "ValueError: Text is too short to score — a few sentences at least.",
+  "event": "rejected",
+  "input_length": 1,
+  "reason": "signal_one_error",
+  "status": "rejected",
+  "timestamp": "2026-11-17T19:23:15+00:00",
+  "total_duration_ms": 6099.98
+}
+```
+The failed-run timing (6.1s for a 1-character input) looks slow for a
+quick rejection — it lands right after an edit to `app.py`, and Flask's
+debug reloader restarts the process on every file change, so the model
+had to load into memory again before signal one could even raise. Not a
+bug in the instrumentation; a real artifact of testing it mid-development,
+worth naming rather than quietly cropping out.
+
+```json
+[
+  {
+    "combined_score": 0.43735,
+    "content_id": "f7205578-6069-4e9c-a9c2-aa77bf27b62c",
+    "creator_id": "cost_measure_1",
+    "guess": "unsure",
+    "input_length": 120,
+    "model_score": 0.6022,
+    "signal_one_duration_ms": 76.19,
+    "status": "decided",
+    "style_score": 0.3667,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 76.27
+  },
+  {
+    "combined_score": 0.30204,
+    "content_id": "a2db1abc-653d-4bfe-9643-3705955a1746",
+    "creator_id": "cost_measure_2",
+    "guess": "human",
+    "input_length": 104,
+    "model_score": 0.2291,
+    "signal_one_duration_ms": 50.6,
+    "status": "decided",
+    "style_score": 0.3333,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 50.67
+  },
+  {
+    "combined_score": 0.39922,
+    "content_id": "d8f1cf06-3d24-46bd-ad70-5c208baaeb44",
+    "creator_id": "cost_measure_3",
+    "guess": "unsure",
+    "input_length": 118,
+    "model_score": 0.5073,
+    "signal_one_duration_ms": 47.85,
+    "status": "decided",
+    "style_score": 0.3529,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 47.92
+  },
+  {
+    "combined_score": 0.35991,
+    "content_id": "721e7604-ee5c-457e-b5c6-97ff65f5570a",
+    "creator_id": "cost_measure_4",
+    "guess": "unsure",
+    "input_length": 107,
+    "model_score": 0.422,
+    "signal_one_duration_ms": 49.03,
+    "status": "decided",
+    "style_score": 0.3333,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 49.09
+  },
+  {
+    "combined_score": 0.32357,
+    "content_id": "b6279c49-a5f3-4411-9657-3aec45e0593e",
+    "creator_id": "cost_measure_5",
+    "guess": "human",
+    "input_length": 117,
+    "model_score": 0.2521,
+    "signal_one_duration_ms": 50.89,
+    "status": "decided",
+    "style_score": 0.3542,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 50.95
+  },
+  {
+    "combined_score": 0.29984,
+    "content_id": "f2baaf73-3d38-4060-9737-5cd9822e90c0",
+    "creator_id": "cost_measure_6",
+    "guess": "human",
+    "input_length": 100,
+    "model_score": 0.243,
+    "signal_one_duration_ms": 50.41,
+    "status": "decided",
+    "style_score": 0.3242,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 50.63
+  },
+  {
+    "combined_score": 0.37244,
+    "content_id": "50b3cba7-0bc8-40b5-9177-c3b4cabc1d2b",
+    "creator_id": "cost_measure_7",
+    "guess": "unsure",
+    "input_length": 117,
+    "model_score": 0.3408,
+    "signal_one_duration_ms": 47.44,
+    "status": "decided",
+    "style_score": 0.386,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 47.51
+  },
+  {
+    "combined_score": 0.38003,
+    "content_id": "0ac741c8-425d-4c45-b549-38300e48efe7",
+    "creator_id": "cost_measure_8",
+    "guess": "unsure",
+    "input_length": 114,
+    "model_score": 0.448,
+    "signal_one_duration_ms": 48.89,
+    "status": "decided",
+    "style_score": 0.3509,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 48.95
+  },
+  {
+    "combined_score": 0.41217,
+    "content_id": "fc303a1a-a36a-4114-8b31-42d314a79b59",
+    "creator_id": "cost_measure_9",
+    "guess": "unsure",
+    "input_length": 135,
+    "model_score": 0.5962,
+    "signal_one_duration_ms": 49.38,
+    "status": "decided",
+    "style_score": 0.3333,
+    "timestamp": "2026-11-17T19:25:42+00:00",
+    "total_duration_ms": 49.46
+  }
+]
+```
+
+**What It Costs**
+
+Nothing here calls a hosted API — the real cost is **compute time**, CPU
+seconds spent inside `detector.model_signal` (GPT-2 inference), since the
+log shows that's effectively the whole request: `signal_one_duration_ms`
+is 99.8% of `total_duration_ms` across these runs, with everything else —
+`stylometry.style_signal`, `scoring.combine_signals`, the audit write —
+taking well under a millisecond combined.
+
+**Method:** sent 10 real submissions (`cost_measure_1`–`10`, each a
+different ~100–135-character paragraph, so the number reflects varied
+input rather than one repeated string), with the model already warm
+(loaded from a prior request, not mid-startup), and read
+`total_duration_ms`/`signal_one_duration_ms` back from the audit log
+rather than timing the client side of the HTTP call.
+
+| | Average (10 runs) | Range |
+|---|---|---|
+| `total_duration_ms` | 52.62 ms | 47.51–76.27 ms |
+| `signal_one_duration_ms` | 52.52 ms | 47.44–76.19 ms |
+
+**≈ 0.0525 CPU-seconds per run, warm.** That's the recurring cost —
+free of any API spend, since the model runs locally, but not free of
+compute: every submission ties up the process for roughly this long,
+which matters for the rate limits already in place (5/minute, 100/day)
+and would matter a great deal more under concurrent load, since this is a
+single-threaded Flask dev server with one model instance, not a pool.
+
+**A second, one-time cost that the per-run number hides:** the first
+request after the process starts (or restarts) pays for loading GPT-2
+into memory — observed at ~11.5 seconds cold versus ~0.05–0.08 seconds
+warm, a roughly 150–230× difference. A deployment that restarts
+frequently (a free host's sleep/wake cycle, a crash loop) would pay this
+repeatedly; this project's own `RUNNING.md` already names that as the
+reason a free host doesn't fit this system at all.
+
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
