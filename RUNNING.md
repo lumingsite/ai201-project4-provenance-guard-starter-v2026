@@ -232,6 +232,24 @@ system doesn't fit its host *before* you spend an evening watching it get
 killed is the skill unit 9 is actually testing. Write the arithmetic above in
 your write-up; that's the deliverable.
 
+### Path B, confirmed — exactly what this ran on
+
+- **Python:** 3.12.15 specifically, not 3.13 or 3.11, on this Intel Mac.
+  `requirements.txt` says 3.11–3.13 are all supported, but `torch>=2.2,<3.0`
+  has no macOS x86_64 wheel past 2.2.2, which is the version this venv
+  resolves to — on a non-Intel or newer machine 3.13 may work fine, but if
+  `pip install -r requirements.txt` fails to find a torch wheel, drop to 3.12
+  first before suspecting anything else.
+- **Pinned dependencies:** exactly what's in `requirements.txt` above, with
+  `torch` resolving to `2.2.2` and `transformers` to whatever satisfies
+  `>=4.44,<5.0` at install time — `python test.py`'s "Pinned packages" check
+  confirms all seven import cleanly before you run anything else.
+- **Model file:** `gpt2`, ~550 MB, downloaded once by `python detector.py`
+  and cached locally afterward — no re-download on restart, unlike a free
+  host's wiped disk.
+- **Single command to run it:** `python app.py`, from a clean checkout, once
+  `python test.py` passes. No other setup.
+
 ---
 
 ## Where everything lives
