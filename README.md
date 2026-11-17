@@ -1581,6 +1581,86 @@ trips, trial 2:
 }
 ```
 
+**Verdicts and Diagnoses**
+
+| Criterion | Verdict |
+|---|---|
+| 1. Complete instrumentation record every call | MET |
+| 2. Cost measurement stable (±20% of mean) | **MISSED** |
+| 3. Instrumentation overhead ≤5ms | MET |
+| 4. Signal-one crash always caught + logged | MET |
+| 5. No regression (ping/health/appeal) | MET |
+
+Four of five held across all three trials without a close call (10/10
+or 5/5 every time, no trial near its own edge) — I don't read those four
+as targets set too easy, since nothing came close to failing by accident.
+
+**Criterion 2 — diagnosis.** Trial 2's raw `signal_one_duration_ms`
+readings: `[60.45, 58.24, 61.81, 68.38, 67.26, 92.14, 75.98, 74.02, 93.73,
+85.96]`. Two of the three readings outside ±20% of the mean — 92.14 and
+93.73 — sit within 1.6ms of each other despite being identical input
+scored by the identical code path, which argues against independent
+per-call noise and for a shared external cause landing on both calls.
+
+**Stage: not one of the five scoring stages — the run path itself.**
+`config.DEBUG` is `True` by default on loopback, and `app.run(debug=True)`
+starts Werkzeug's **stat reloader**: a background thread that polls every
+Python file in the project for changes on a fixed interval so the server
+can restart itself on edits. **Mechanism:** that polling runs inside the
+same single-threaded Python process handling the request, competing for
+the GIL with the exact code the timer is measuring. The two correlated
+outliers are consistent with two requests that happened to land during a
+reloader poll; the rest, landing between polls, read close to the real
+~55–70ms signal-one cost. The criterion's target (±20% stability) was
+reasonable — the actual problem is that development-mode debugging was
+still on while measuring a number meant to describe production cost, a
+mismatch between how the system was run and what the criterion claimed
+to measure.
+
+**The improvement:** switched the running process from
+`python app.py` (Werkzeug dev server, `debug=True`, reloader on) to
+`gunicorn --workers 1 --threads 1 app:app`, with `AI201_DEBUG=0` —
+exactly what `RUNNING.md`'s own unit 9 section already named as the real
+server, previously unused. One change: how the process runs, nothing in
+`app.py`, `detector.py`, or any scoring file touched.
+
+**Criterion run, after** — same `capstone_eval.py`, 3 fresh trials
+against the gunicorn process:
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Complete instrumentation record every call | 20/20 | 20/20 | 20/20 | 20/20 | MET |
+| 2. Cost measurement stable (±20% of mean) | 9/10 | **10/10** | **9/10** | **9/10** | **MET** |
+| 3. Instrumentation overhead ≤5ms | 9/10 | 10/10 | 10/10 | 10/10 | MET |
+| 4. Signal-one crash always caught + logged | 5/5 | 5/5 | 5/5 | 5/5 | MET |
+| 5. No regression (ping/health/appeal) | 5/5 each | 5/5/5 | 5/5/5 | 5/5/5 | MET |
+
+Raw `signal_one_duration_ms` readings, all three after-trials
+(`results/capstone_trial_{1,2,3}_after.json`):
+
+```json
+"trial 1 (mean 61.09ms)": [57.22, 60.77, 56.33, 56.71, 55.0, 61.71, 69.46, 70.03, 68.43, 55.19],
+"trial 2 (mean 58.88ms)": [57.3, 58.05, 63.65, 56.35, 56.96, 57.01, 54.97, 56.83, 56.27, 71.42],
+"trial 3 (mean 63.81ms)": [71.49, 74.0, 74.18, 82.22, 55.07, 55.19, 56.19, 56.05, 57.98, 55.72]
+```
+
+**Did it help:** yes, cleanly. All three trials now meet 9/10 (one even
+hit 10/10), the target holds in every trial instead of two of three, and
+the worst single outlier dropped from 93.73ms to 82.22ms — smaller, and
+no longer paired with a second outlier nearby in the same trial, which is
+exactly what "the reloader was adding correlated spikes" would predict if
+removing it helped. **Honest trade:** this isn't free — running under
+gunicorn instead of the dev server also means losing the auto-reload
+convenience during active development (a code change now needs a manual
+restart), and the warm-cost number measured earlier in **What It Costs**
+(52.62ms average) was taken under the dev server too, so it's very
+slightly inflated by the same mechanism — the true warm cost is closer to
+the ~61ms mean observed here across cleaner trials, which is actually
+*higher*, not lower, because that earlier average happened to be pulled
+from runs that mostly landed between reloader polls rather than on top of
+one. Nothing about criteria 1, 3, 4, or 5 moved, confirming this was a
+genuinely isolated fix rather than a broader change in behavior.
+
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**

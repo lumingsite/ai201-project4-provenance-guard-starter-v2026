@@ -198,6 +198,7 @@ def criterion_5(trial):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--trial", type=int, required=True)
+    parser.add_argument("--label", default="")
     args = parser.parse_args()
 
     try:
@@ -223,7 +224,8 @@ def main():
     print(f"C5 ping/health/appeal: {c5['ping_met']}/5, {c5['health_met']}/5, {c5['appeal_met']}/5")
 
     config.RESULTS_DIR.mkdir(exist_ok=True)
-    out_path = config.RESULTS_DIR / f"capstone_trial_{args.trial}.json"
+    suffix = f"_{args.label}" if args.label else ""
+    out_path = config.RESULTS_DIR / f"capstone_trial_{args.trial}{suffix}.json"
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"Wrote {out_path}")
 

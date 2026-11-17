@@ -1,0 +1,279 @@
+{
+  "trial": 3,
+  "criterion_1": {
+    "met": 20,
+    "total": 20,
+    "detail": [
+      {
+        "creator_id": "cap_c1_t3_ok1",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok2",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok3",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok4",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok5",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok6",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok7",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok8",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok9",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok10",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok11",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok12",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok13",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok14",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_ok15",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_bad1",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_bad2",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_bad3",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_bad4",
+        "found": true,
+        "complete": true
+      },
+      {
+        "creator_id": "cap_c1_t3_bad5",
+        "found": true,
+        "complete": true
+      }
+    ]
+  },
+  "criterion_2_3": {
+    "c2_met": 9,
+    "c2_total": 10,
+    "mean_signal_one_ms": 63.81,
+    "signal_one_ms": [
+      71.49,
+      74.0,
+      74.18,
+      82.22,
+      55.07,
+      55.19,
+      56.19,
+      56.05,
+      57.98,
+      55.72
+    ],
+    "c3_met": 10,
+    "c3_total": 10,
+    "overheads_ms": [
+      0.08,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.07,
+      0.08
+    ]
+  },
+  "criterion_4": {
+    "met": 5,
+    "total": 5,
+    "detail": [
+      {
+        "creator_id": "cap_c4_t3_1",
+        "status": 500,
+        "clean_json_500": true,
+        "logged": true
+      },
+      {
+        "creator_id": "cap_c4_t3_2",
+        "status": 500,
+        "clean_json_500": true,
+        "logged": true
+      },
+      {
+        "creator_id": "cap_c4_t3_3",
+        "status": 500,
+        "clean_json_500": true,
+        "logged": true
+      },
+      {
+        "creator_id": "cap_c4_t3_4",
+        "status": 500,
+        "clean_json_500": true,
+        "logged": true
+      },
+      {
+        "creator_id": "cap_c4_t3_5",
+        "status": 500,
+        "clean_json_500": true,
+        "logged": true
+      }
+    ]
+  },
+  "criterion_5": {
+    "ping_met": 5,
+    "health_met": 5,
+    "appeal_met": 5,
+    "total": 5,
+    "detail": [
+      {
+        "route": "ping",
+        "i": 1,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "ping",
+        "i": 2,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "ping",
+        "i": 3,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "ping",
+        "i": 4,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "ping",
+        "i": 5,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "health",
+        "i": 1,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "health",
+        "i": 2,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "health",
+        "i": 3,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "health",
+        "i": 4,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "health",
+        "i": 5,
+        "status": 200,
+        "ok": true
+      },
+      {
+        "route": "submit+appeal",
+        "i": 1,
+        "submit_status": 200,
+        "appeal_status": 200,
+        "ok": true
+      },
+      {
+        "route": "submit+appeal",
+        "i": 2,
+        "submit_status": 200,
+        "appeal_status": 200,
+        "ok": true
+      },
+      {
+        "route": "submit+appeal",
+        "i": 3,
+        "submit_status": 200,
+        "appeal_status": 200,
+        "ok": true
+      },
+      {
+        "route": "submit+appeal",
+        "i": 4,
+        "submit_status": 200,
+        "appeal_status": 200,
+        "ok": true
+      },
+      {
+        "route": "submit+appeal",
+        "i": 5,
+        "submit_status": 200,
+        "appeal_status": 200,
+        "ok": true
+      }
+    ]
+  }
+}

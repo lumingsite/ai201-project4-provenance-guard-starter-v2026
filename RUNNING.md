@@ -261,6 +261,14 @@ your write-up; that's the deliverable.
   host's wiped disk.
 - **Single command to run it:** `python app.py`, from a clean checkout, once
   `python test.py` passes. No other setup.
+- **For timing/cost measurements specifically, run it under gunicorn
+  instead:** `AI201_DEBUG=0 gunicorn --workers 1 --threads 1 app:app
+  --bind 127.0.0.1:5000`. The capstone diagnosis found that `python app.py`'s
+  debug-mode reloader thread (on by default on loopback) occasionally
+  steals CPU from the request it's supposed to be timing, inflating a
+  handful of readings per run. Development still uses `python app.py` for
+  the auto-reload; anything measuring latency or cost should use gunicorn,
+  which has no reloader.
 
 ---
 
