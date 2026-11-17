@@ -24,6 +24,7 @@ Routes:
     GET  /health      is the service up, and is the model loaded
 """
 
+import time
 import uuid
 
 from flask import Flask, jsonify, request
@@ -160,6 +161,11 @@ def submit():
     Take a piece of text, decide about it, log the decision, answer.
     ← TODO — Milestones 3, 4 and 5
 
+    ← CAPSTONE: total request duration and signal-one duration are timed and
+    logged on every call that reaches scoring — see `request_start` below and
+    the `total_duration_ms` / `signal_one_duration_ms` fields passed to
+    `audit.log_decision`.
+
     Expects JSON:
         {"text": "...", "creator_id": "..."}
 
@@ -202,6 +208,8 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
+    request_start = time.perf_counter()
+
     payload = request.get_json(silent=True) or {}
     text = payload.get("text")
     creator_id = payload.get("creator_id") or "unknown"
@@ -235,11 +243,16 @@ def submit():
     # Milestone 4: both signals and the combined score are real now.
     # guess/label still come from the Milestone 5 placeholder in
     # scoring.score_to_label.
+    signal_one_start = time.perf_counter()
     model_score = detector.model_signal(text)
+    signal_one_duration_ms = round((time.perf_counter() - signal_one_start) * 1000, 2)
+
     style_score = stylometry.style_signal(text)
     combined_score = scoring.combine_signals(model_score, style_score)
     guess, label = scoring.score_to_label(combined_score)
     confidence = scoring.score_to_confidence(combined_score)
+
+    total_duration_ms = round((time.perf_counter() - request_start) * 1000, 2)
 
     audit.log_decision(
         content_id=content_id,
@@ -250,6 +263,9 @@ def submit():
         combined_score=combined_score,
         label=label,
         status="decided",
+        input_length=len(text),
+        total_duration_ms=total_duration_ms,
+        signal_one_duration_ms=signal_one_duration_ms,
     )
 
     return jsonify({
